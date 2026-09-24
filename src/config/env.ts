@@ -48,9 +48,25 @@ export type Env = z.infer<typeof schema>
 let cached: Env | null = null
 
 /** Validated server-side configuration. Never import from client components. */
+const DEV_FALLBACKS: Record<string, string> = {
+  SESSION_SECRET: 'dev-only-session-secret-change-me-0123456789',
+  PAYMENT_SECRET: 'dev-only-payment-secret-change-me',
+}
+
 export function env(): Env {
   if (cached) return cached
-  const parsed = schema.safeParse(process.env)
+  const source: Record<string, string | undefined> = { ...process.env }
+  // Outside production, missing secrets fall back to dev values (with a warning) so a
+  // half-filled .env does not break local development. Production always requires them.
+  if (process.env.NODE_ENV !== 'production') {
+    for (const [k, v] of Object.entries(DEV_FALLBACKS)) {
+      if (!source[k] || source[k]!.length < (k === 'SESSION_SECRET' ? 32 : 16)) {
+        console.warn(`[env] ${k} is missing or too short — using an insecure development value. Set it in .env.`)
+        source[k] = v
+      }
+    }
+  }
+  const parsed = schema.safeParse(source)
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
     throw new Error(`Invalid environment configuration: ${issues}`)
