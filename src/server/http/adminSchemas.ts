@@ -8,7 +8,13 @@ export const imageSchema = z
   .string()
   .trim()
   .max(500)
-  .refine((v) => /^\/assets\/[a-zA-Z0-9/_.-]+\.(svg|png|webp|jpg|jpeg)$/.test(v) || /^https:\/\/[^\s"'<>]+$/.test(v), 'Путь /assets/... или https:// URL')
+  .refine(
+    (v) =>
+      /^\/assets\/[a-zA-Z0-9/_.-]+\.(svg|png|webp|jpg|jpeg)$/.test(v) ||
+      /^\/api\/uploads\/[a-f0-9]{32}\.(png|jpg|webp)$/.test(v) ||
+      /^https:\/\/[^\s"'<>]+$/.test(v),
+    'Путь /assets/..., загруженный файл или https:// URL',
+  )
 
 export const moneyNumber = z.number().multipleOf(0.01)
 
@@ -37,6 +43,19 @@ export const caseSchema = z.object({
   status: z.enum(['active', 'disabled']),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   isFeatured: z.boolean().optional(),
+  categoryId: z.uuid().nullable().optional(),
+})
+
+export const categorySchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(80)
+    .regex(/^[a-z0-9-]+$/, 'Только a-z, 0-9 и -'),
+  sortOrder: z.number().int().min(0).max(10_000),
+  isActive: z.boolean(),
 })
 
 export const caseItemsSchema = z.object({

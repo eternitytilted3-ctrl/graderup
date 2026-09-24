@@ -4,6 +4,7 @@ import { D, toMoney } from '@/lib/money'
 import type { Rarity } from '@/lib/types'
 import { getDb } from '../db/client'
 import {
+  caseCategories,
   adminLogs,
   caseItems,
   caseOpenings,
@@ -316,6 +317,7 @@ export interface CaseInput {
   status: 'active' | 'disabled'
   sortOrder?: number
   isFeatured?: boolean
+  categoryId?: string | null
 }
 
 export async function caseForEdit(caseId: string) {
@@ -344,6 +346,7 @@ export async function saveCase(adminId: string, id: string | null, input: CaseIn
     status: input.status,
     sortOrder: input.sortOrder ?? 0,
     isFeatured: input.isFeatured ?? false,
+    categoryId: input.categoryId || null,
   }
   return getDb().transaction(async (tx) => {
     const [dup] = await tx.select({ id: cases.id }).from(cases).where(eq(cases.slug, values.slug))
@@ -605,5 +608,45 @@ export async function updateSettings(adminId: string, key: SettingKey, value: un
     const saved = await setSetting(tx, key, value, adminId)
     await logAdmin(tx, { adminId, action: 'settings_update', targetType: 'setting', targetId: key, details: { value: saved }, ip })
     return saved
+  })
+}
+
+// ─── Case categories ─────────────────────────────────────────────────────
+export async function listCategories() {
+  const db = getDb()
+  const rows = await db
+    .select({ c: caseCategories, cases: sql<number>`(select count(*)::int from cases where cases.category_id = ${caseCategories.id})` })
+    .from(caseCategories)
+    .orderBy(caseCategories.sortOrder, caseCategories.name)
+  return rows.map((r) => ({ ...r.c, createdAt: r.c.createdAt.toISOString(), caseCount: r.cases }))
+}
+
+export async function saveCategory(
+  adminId: string,
+  id: string | null,
+  input: { name: string; slug: string; sortOrder: number; isActive: boolean },
+  ip?: string,
+) {
+  return getDb().transaction(async (tx) => {
+    const [dup] = await tx.select({ id: caseCategories.id }).from(caseCategories).where(eq(caseCategories.slug, input.slug))
+    if (dup && dup.id !== id) throw Errors.validation({ fields: { slug: 'Slug уже используется' } })
+    let row
+    if (id) {
+      ;[row] = await tx.update(caseCategories).set(input).where(eq(caseCategories.id, id)).returning()
+      if (!row) throw Errors.notFound('Категория не найдена')
+    } else {
+      ;[row] = await tx.insert(caseCategories).values(input).returning()
+    }
+    await logAdmin(tx, { adminId, action: id ? 'category_update' : 'category_create', targetType: 'case_category', targetId: row.id, details: input, ip })
+    return row
+  })
+}
+
+export async function deleteCategory(adminId: string, id: string, ip?: string) {
+  return getDb().transaction(async (tx) => {
+    const [row] = await tx.delete(caseCategories).where(eq(caseCategories.id, id)).returning()
+    if (!row) throw Errors.notFound('Категория не найдена')
+    await logAdmin(tx, { adminId, action: 'category_delete', targetType: 'case_category', targetId: id, details: { name: row.name }, ip })
+    return { ok: true }
   })
 }

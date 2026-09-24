@@ -4,6 +4,8 @@ import { useState, type FormEvent } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
+import { useFetch } from '@/lib/useFetch'
+import { ImageField } from './ImageField'
 import { Field } from './ui'
 
 export interface CaseRecord {
@@ -16,12 +18,14 @@ export interface CaseRecord {
   status: 'active' | 'disabled'
   sortOrder: number
   isFeatured: boolean
+  categoryId?: string | null
 }
 
 export function CaseForm({ initial, onSaved }: { initial?: CaseRecord; onSaved: (c: CaseRecord) => void }) {
   const toast = useToast()
   const [errs, setErrs] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
+  const cats = useFetch<{ items: { id: string; name: string }[] }>('/api/admin/categories')
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
@@ -37,6 +41,7 @@ export function CaseForm({ initial, onSaved }: { initial?: CaseRecord; onSaved: 
         status: fd.get('status'),
         sortOrder: Number(fd.get('sortOrder') || 0),
         isFeatured: fd.get('isFeatured') === 'on',
+        categoryId: String(fd.get('categoryId') || '') || null,
       }
       const r = await api<CaseRecord>(initial ? `/api/admin/cases/${initial.id}` : '/api/admin/cases', { method: initial ? 'PUT' : 'POST', body })
       toast.success('Кейс сохранён')
@@ -66,8 +71,16 @@ export function CaseForm({ initial, onSaved }: { initial?: CaseRecord; onSaved: 
           <option value="disabled">disabled</option>
         </select>
       </Field>
-      <Field label="Изображение" error={errs.image} hint="/assets/cases/xxx.svg или https://…">
-        <input name="image" className="input h-10" defaultValue={initial?.image ?? '/assets/cases/starter.svg'} required />
+      <ImageField name="image" defaultValue={initial?.image ?? '/assets/cases/magnum.svg'} error={errs.image} />
+      <Field label="Категория" error={errs.categoryId}>
+        <select name="categoryId" className="input h-10" defaultValue={initial?.categoryId ?? ''} key={cats.data ? 'loaded' : 'loading'}>
+          <option value="">— без категории —</option>
+          {cats.data?.items.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </Field>
       <Field label="Порядок сортировки" error={errs.sortOrder}>
         <input name="sortOrder" type="number" className="input h-10" defaultValue={initial?.sortOrder ?? 0} />

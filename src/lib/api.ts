@@ -60,3 +60,21 @@ export function qs(params: Record<string, string | number | undefined | null>) {
   const str = s.toString()
   return str ? `?${str}` : ''
 }
+
+/** multipart upload (admin images). Same CSRF/idempotency headers as `api`. */
+export async function apiUpload<T = unknown>(path: string, form: FormData): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    body: form,
+    credentials: 'same-origin',
+    headers: { accept: 'application/json', 'x-csrf-token': readCookie('gu_csrf'), 'idempotency-key': newIdempotencyKey() },
+  }).catch(() => {
+    throw new ApiError(0, 'NETWORK', 'Нет соединения с сервером.')
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) {
+    const e = data?.error ?? {}
+    throw new ApiError(res.status, e.code ?? 'UNKNOWN', e.fields?.file ?? e.message ?? 'Ошибка загрузки', e.fields)
+  }
+  return data as T
+}

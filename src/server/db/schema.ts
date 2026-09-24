@@ -150,6 +150,19 @@ export const items = pgTable(
   ],
 )
 
+export const caseCategories = pgTable(
+  'case_categories',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: varchar('name', { length: 80 }).notNull(),
+    slug: varchar('slug', { length: 80 }).notNull(),
+    sortOrder: integer('sort_order').notNull().default(0),
+    isActive: boolean('is_active').notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('case_categories_slug_uq').on(t.slug), index('case_categories_sort_idx').on(t.sortOrder)],
+)
+
 export const cases = pgTable(
   'cases',
   {
@@ -162,11 +175,13 @@ export const cases = pgTable(
     status: caseStatus('status').notNull().default('active'),
     sortOrder: integer('sort_order').notNull().default(0),
     isFeatured: boolean('is_featured').notNull().default(false),
+    categoryId: uuid('category_id').references(() => caseCategories.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex('cases_slug_uq').on(t.slug),
+    index('cases_category_idx').on(t.categoryId),
     index('cases_status_idx').on(t.status, t.sortOrder),
     check('cases_price_positive', sql`${t.price} > 0`),
   ],
@@ -251,6 +266,7 @@ export const upgrades = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    /** First source item (kept for compatibility); all sources are in upgrade_sources. */
     sourceUserItemId: uuid('source_user_item_id')
       .notNull()
       .references(() => userItems.id, { onDelete: 'restrict' }),
@@ -274,6 +290,25 @@ export const upgrades = pgTable(
     uniqueIndex('upgrades_source_user_item_uq').on(t.sourceUserItemId),
     index('upgrades_user_idx').on(t.userId, t.createdAt),
   ],
+)
+
+/** Every inventory item consumed by an upgrade (1..5). UNIQUE(user_item_id): one item — one upgrade. */
+export const upgradeSources = pgTable(
+  'upgrade_sources',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    upgradeId: uuid('upgrade_id')
+      .notNull()
+      .references(() => upgrades.id, { onDelete: 'cascade' }),
+    userItemId: uuid('user_item_id')
+      .notNull()
+      .references(() => userItems.id, { onDelete: 'restrict' }),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'restrict' }),
+    value: money('value').notNull(),
+  },
+  (t) => [uniqueIndex('upgrade_sources_user_item_uq').on(t.userItemId), index('upgrade_sources_upgrade_idx').on(t.upgradeId)],
 )
 
 export const transactions = pgTable(

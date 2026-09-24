@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb, getDb } from '@/server/db/client'
 import { payments, userItems } from '@/server/db/schema'
 import { getMockProvider } from '@/server/payments'
-import { openCase } from '@/server/services/cases'
+import { openCase, openCases } from '@/server/services/cases'
 import { listInventory, sellItems } from '@/server/services/inventory'
 import { createPayment, handleWebhook } from '@/server/services/payments'
 import { redeemPromocode } from '@/server/services/promocodes'
@@ -51,6 +51,66 @@ describe('case opening', () => {
   })
 })
 
+describe('multi-open (×N)', () => {
+  it('opens N cases atomically; not enough balance for all → nothing opened', async () => {
+    const u = await createUser('6.00') // 3 cases worth
+    await expect(openCases(u.id, cat.case.id, 5)).rejects.toMatchObject({ code: 'INSUFFICIENT_FUNDS' })
+    expect(await balanceOf(u.id)).toBe('6.00')
+    const r = await openCases(u.id, cat.case.id, 3)
+    expect(r.results).toHaveLength(3)
+    expect(new Set(r.results.map((x) => x.userItemId)).size).toBe(3)
+    expect(r.balance).toBe('0.00')
+    expect(await ledgerConsistent(u.id)).toBe(true)
+  })
+
+  it('parallel ×5 opens never overspend', async () => {
+    const u = await createUser('22.00') // 11 cases worth
+    const rs = await settle(Array.from({ length: 6 }, () => openCases(u.id, cat.case.id, 5)))
+    expect(ok(rs)).toBe(2)
+    expect(await balanceOf(u.id)).toBe('2.00')
+    expect(await ledgerConsistent(u.id)).toBe(true)
+  })
+
+  it('rejects count outside 1..5', async () => {
+    const u = await createUser('100.00')
+    await expect(openCases(u.id, cat.case.id, 6)).rejects.toMatchObject({ status: 400 })
+    await expect(openCases(u.id, cat.case.id, 0)).rejects.toMatchObject({ status: 400 })
+  })
+})
+
+describe('multi-source upgrade', () => {
+  it('uses the sum of up to 5 items; all sources are consumed', async () => {
+    const u = await createUser('10.00')
+    const { results } = await openCases(u.id, cat.case.id, 5)
+    const ids = results.map((r) => r.userItemId)
+    const r = await performUpgrade(u.id, ids, cat.pricey.id)
+    expect(r.sources).toHaveLength(5)
+    const [{ n }] = await getDb().select({ n: count() }).from(userItems).where(and(eq(userItems.userId, u.id), eq(userItems.status, 'used')))
+    expect(n).toBe(5)
+    expect(await ledgerConsistent(u.id)).toBe(true)
+  })
+
+  it('rejects duplicates, >5 items and foreign items', async () => {
+    const u = await createUser('12.00')
+    const other = await createUser('2.00')
+    const { results } = await openCases(u.id, cat.case.id, 5)
+    const mine = results.map((r) => r.userItemId)
+    const foreign = (await openCase(other.id, cat.case.id)).userItemId
+    await expect(performUpgrade(u.id, [mine[0], mine[0]], cat.pricey.id)).rejects.toMatchObject({ status: 400 })
+    await expect(performUpgrade(u.id, [...mine, foreign], cat.pricey.id)).rejects.toMatchObject({ status: 400 })
+    await expect(performUpgrade(u.id, [mine[0], foreign], cat.pricey.id)).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('overlapping parallel upgrades: each item is consumed at most once', async () => {
+    const u = await createUser('8.00')
+    const { results } = await openCases(u.id, cat.case.id, 4)
+    const [a, b, c, d] = results.map((r) => r.userItemId)
+    const rs = await settle([performUpgrade(u.id, [a, b], cat.pricey.id), performUpgrade(u.id, [b, c], cat.pricey.id), performUpgrade(u.id, [c, d], cat.pricey.id)])
+    expect(ok(rs)).toBe(2) // {a,b} and {c,d} succeed, {b,c} conflicts
+    expect(await ledgerConsistent(u.id)).toBe(true)
+  })
+})
+
 describe('selling', () => {
   it('parallel sells of the same item succeed exactly once', async () => {
     const u = await createUser('2.00')
@@ -73,7 +133,7 @@ describe('upgrade', () => {
   it('parallel upgrades of one item run exactly once', async () => {
     const u = await createUser('2.00')
     const { userItemId } = await openCase(u.id, cat.case.id)
-    const rs = await settle(Array.from({ length: 10 }, () => performUpgrade(u.id, userItemId, cat.pricey.id)))
+    const rs = await settle(Array.from({ length: 10 }, () => performUpgrade(u.id, [userItemId], cat.pricey.id)))
     expect(ok(rs)).toBe(1)
     const [{ n }] = await getDb().select({ n: count() }).from(userItems).where(and(eq(userItems.id, userItemId), eq(userItems.status, 'used')))
     expect(n).toBe(1)
@@ -85,8 +145,8 @@ describe('upgrade', () => {
     const other = await createUser()
     const { userItemId, item } = await openCase(u.id, cat.case.id)
     const cheaperOrSame = item.id === cat.cheap.id ? cat.cheap.id : cat.cheap.id
-    await expect(performUpgrade(u.id, userItemId, cheaperOrSame)).rejects.toMatchObject({ status: 400 })
-    await expect(performUpgrade(other.id, userItemId, cat.pricey.id)).rejects.toMatchObject({ status: 404 })
+    await expect(performUpgrade(u.id, [userItemId], cheaperOrSame)).rejects.toMatchObject({ status: 400 })
+    await expect(performUpgrade(other.id, [userItemId], cat.pricey.id)).rejects.toMatchObject({ status: 404 })
   })
 })
 

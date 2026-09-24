@@ -3,6 +3,7 @@
 import { RefreshCw } from 'lucide-react'
 import Image from 'next/image'
 import { useState, type FormEvent } from 'react'
+import { ImageField } from '@/components/admin/ImageField'
 import { AdminTitle, DataTable, Field } from '@/components/admin/ui'
 import { RarityBadge, rarityColor } from '@/components/domain/RarityBadge'
 import { useSession } from '@/components/SessionProvider'
@@ -143,9 +144,7 @@ export default function AdminItems() {
               ))}
             </select>
           </Field>
-          <Field label="Изображение" error={errs.image} hint="/assets/items/rifle.svg или https://… (только ресурсы с правами на использование)">
-            <input name="image" className="input h-10" defaultValue={cur?.image ?? '/assets/items/rifle.svg'} required />
-          </Field>
+          <ImageField name="image" defaultValue={cur?.image ?? '/assets/items/rifle.svg'} error={errs.image} />
           <div className="sm:col-span-2">
             <Field label="market_hash_name (для синхронизации цены)" error={errs.marketHashName} hint='Например: "AK-47 | Redline (Field-Tested)". Пусто — цена только вручную.'>
               <input name="marketHashName" className="input h-10" defaultValue={cur?.marketHashName ?? ''} maxLength={200} />

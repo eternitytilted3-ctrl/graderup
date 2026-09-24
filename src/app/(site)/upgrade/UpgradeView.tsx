@@ -1,49 +1,99 @@
 'use client'
 
-import { ArrowDown, ArrowRight, TrendingUp } from 'lucide-react'
+import { ArrowDown, ArrowRight, Plus, TrendingUp, X, Zap } from 'lucide-react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ItemCard } from '@/components/domain/ItemCard'
 import { PageHeader } from '@/components/domain/PageHeader'
+import { rarityColor } from '@/components/domain/RarityBadge'
 import { UpgradeCard } from '@/components/domain/UpgradeCard'
 import { UpgradeDial, type DialState, type UpgradeDialHandle } from '@/components/domain/UpgradeDial'
-import { SoundToggle } from '@/components/ui/SoundToggle'
-import { sfx } from '@/lib/sound'
+import { WinCelebration } from '@/components/domain/WinCelebration'
 import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { Search } from '@/components/ui/Search'
+import { SoundToggle } from '@/components/ui/SoundToggle'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError, qs } from '@/lib/api'
+import { cn } from '@/lib/cn'
 import { D, formatMoney } from '@/lib/money'
+import { sfx } from '@/lib/sound'
 import type { InventoryItemDTO, ItemDTO, Paginated, UpgradeResultDTO } from '@/lib/types'
 import { useFetch } from '@/lib/useFetch'
 
+const MAX_SOURCES = 5
+type QuickMode = 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75'
+
 interface Preview {
   chance: string
+  sourceValue: string
   potentialWin: string
   potentialLoss: string
   multiplier: string
 }
 
+/** Left slot: 1..5 selected source skins. */
+function SourcesSlot({ sources, onRemove, disabled, state }: { sources: InventoryItemDTO[]; onRemove: (id: string) => void; disabled: boolean; state: DialState }) {
+  if (sources.length <= 1)
+    return <UpgradeCard label="Ваши предметы · до 5" item={sources[0]?.item ?? null} placeholder="Выберите до 5 предметов из инвентаря ниже" onClear={disabled || !sources[0] ? undefined : () => onRemove(sources[0].id)} highlight={state === 'loss' ? 'loss' : null} />
+  const sum = sources.reduce((s, e) => s.plus(e.item.price), D(0))
+  return (
+    <div className={cn('flex h-full min-h-52 flex-col rounded-[var(--radius-xl)] border bg-card p-4 transition', state === 'loss' ? 'border-danger/70 opacity-70' : 'border-border-strong')}>
+      <div className="flex items-center justify-between">
+        <span className="label">Ваши предметы · {sources.length}/{MAX_SOURCES}</span>
+      </div>
+      <div className="mt-3 grid flex-1 grid-cols-3 gap-2">
+        {sources.map((e) => (
+          <div key={e.id} data-rarity={e.item.rarity} className="slot-bg group relative flex flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border p-1.5">
+            <Image src={e.item.image} alt={e.item.name} width={120} height={84} className="h-12 w-auto object-contain" />
+            <span className="mt-1 w-full truncate text-center text-[10px] text-muted">{e.item.name.split(' | ')[0]}</span>
+            <span className="text-[11px] font-semibold tnum">{formatMoney(e.item.price)}</span>
+            <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ background: 'var(--r)' }} />
+            {!disabled && (
+              <button onClick={() => onRemove(e.id)} className="absolute top-1 right-1 rounded bg-black/50 p-0.5 text-subtle hover:text-text" aria-label={`Убрать ${e.item.name}`}>
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        ))}
+        {sources.length < MAX_SOURCES && (
+          <div className="grid place-items-center rounded-[var(--radius-md)] border border-dashed border-border-strong text-subtle">
+            <Plus className="size-4" />
+          </div>
+        )}
+      </div>
+      <div className="mt-3 flex items-center justify-between text-sm">
+        <span className="text-muted">Сумма</span>
+        <span className="font-display text-lg font-bold tnum">{formatMoney(sum.toFixed(2))}</span>
+      </div>
+    </div>
+  )
+}
+
 export function UpgradeView({ authed, config }: { authed: boolean; config: { minMultiplier: number; maxMultiplier: number } }) {
   const toast = useToast()
   const params = useSearchParams()
-  const [source, setSource] = useState<InventoryItemDTO | null>(null)
+  const [sources, setSources] = useState<InventoryItemDTO[]>([])
   const [target, setTarget] = useState<ItemDTO | null>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
   const [state, setState] = useState<DialState>('idle')
-  const [, setResult] = useState<UpgradeResultDTO | null>(null)
+  const [fast, setFast] = useState(false)
+  const [celebrate, setCelebrate] = useState<{ x: number; y: number; color: string } | null>(null)
   const dial = useRef<UpgradeDialHandle>(null)
-  const [autoMode, setAutoMode] = useState<string | null>(null)
+  const dialBox = useRef<HTMLDivElement>(null)
+  const [autoMode, setAutoMode] = useState<QuickMode | null>(null)
   const [invPage, setInvPage] = useState(1)
   const [tPage, setTPage] = useState(1)
   const [tSearch, setTSearch] = useState('')
   const [tSort, setTSort] = useState<'price_asc' | 'price_desc'>('price_asc')
 
+  const sourceValue = sources.reduce((s, e) => s.plus(e.item.price), D(0))
+  const sourceIds = sources.map((s) => s.id)
   const inv = useFetch<Paginated<InventoryItemDTO>>(authed ? `/api/inventory${qs({ page: invPage, pageSize: 12, sort: 'price_desc' })}` : null)
-  const minTarget = source ? D(source.item.price).mul(config.minMultiplier).toFixed(2) : undefined
+  const minTarget = sources.length ? sourceValue.mul(config.minMultiplier).toFixed(2) : undefined
   const targets = useFetch<Paginated<ItemDTO>>(`/api/upgrade/targets${qs({ page: tPage, pageSize: 12, minPrice: minTarget, search: tSearch, sort: tSort })}`)
 
   // Preselect ?item=<userItemId>
@@ -51,21 +101,22 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
     const id = params.get('item')
     if (!id || !authed) return
     api<InventoryItemDTO>(`/api/inventory/${id}`)
-      .then((e) => e.status === 'available' && setSource(e))
+      .then((e) => e.status === 'available' && setSources([e]))
       .catch(() => {})
   }, [params, authed])
 
+  const idsKey = sourceIds.join(',')
   // Chance always comes from the server.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPreview(null)
-    if (!source || !target) return
+    if (!idsKey || !target) return
     const c = new AbortController()
     const t = setTimeout(() => {
-      api<Preview>('/api/upgrade/preview', { body: { userItemId: source.id, targetItemId: target.id }, signal: c.signal })
+      api<Preview>('/api/upgrade/preview', { body: { userItemIds: idsKey.split(','), targetItemId: target.id }, signal: c.signal })
         .then(setPreview)
         .catch((e: ApiError) => {
-          if (e.name !== 'AbortError') toast.error('Недопустимая пара', e.message)
+          if (e.name !== 'AbortError') toast.error('Недопустимая комбинация', e.message)
         })
     }, 150)
     return () => {
@@ -73,28 +124,62 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
       c.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source?.id, target?.id])
+  }, [idsKey, target?.id])
 
   const spinning = state === 'spinning'
+  const done = state === 'win' || state === 'loss'
+
+  function resetOutcome() {
+    if (done) {
+      setState('idle')
+      dial.current?.reset()
+    }
+  }
+
+  function toggleSource(e: InventoryItemDTO) {
+    if (spinning) return
+    resetOutcome()
+    setSources((cur) => {
+      if (cur.some((s) => s.id === e.id)) return cur.filter((s) => s.id !== e.id)
+      if (cur.length >= MAX_SOURCES) {
+        toast.info(`Можно выбрать не больше ${MAX_SOURCES} предметов`)
+        return cur
+      }
+      return [...cur, e]
+    })
+    setTPage(1)
+  }
+
+  // Drop a target that became too cheap for the new source sum.
+  useEffect(() => {
+    if (target && sources.length && D(target.price).lt(sourceValue.mul(config.minMultiplier))) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTarget(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey])
+
+  const onCelebrationDone = useCallback(() => setCelebrate(null), [])
 
   async function run() {
-    if (!source || !target || spinning) return
-    setResult(null)
+    if (!sources.length || !target || spinning) return
     dial.current?.reset()
     setState('spinning')
     try {
       // The server decides the outcome first; the dial only visualizes the returned roll.
-      const r = await api<UpgradeResultDTO>('/api/upgrade', { body: { userItemId: source.id, targetItemId: target.id } })
-      setResult(r)
-      await dial.current?.spin(r.rollFraction)
+      const r = await api<UpgradeResultDTO>('/api/upgrade', { body: { userItemIds: sourceIds, targetItemId: target.id } })
+      await dial.current?.spin(r.rollFraction, { fast })
       setState(r.result)
       if (r.result === 'win') {
         sfx.success()
+        const box = dialBox.current?.getBoundingClientRect()
+        if (box) setCelebrate({ x: box.left + box.width / 2, y: box.top + box.height / 2, color: rarityColor[r.target.rarity] })
         toast.success('Апгрейд успешен!', `${r.target.name} добавлен в инвентарь`)
       } else {
         sfx.fail()
-        toast.error('Апгрейд не удался', `${r.source.name} сгорел`)
+        toast.error('Апгрейд не удался', r.sources.length > 1 ? `Сгорело предметов: ${r.sources.length}` : `${r.sources[0].name} сгорел`)
       }
+      setSources([])
       inv.reload()
     } catch (err) {
       setState('idle')
@@ -103,19 +188,17 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
     }
   }
 
-  async function quick(mode: 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75') {
-    if (!source || spinning) {
-      if (!source) toast.info('Сначала выберите свой предмет')
+  async function quick(mode: QuickMode) {
+    if (!sources.length || spinning) {
+      if (!sources.length) toast.info('Сначала выберите свои предметы')
       return
     }
+    resetOutcome()
     setAutoMode(mode)
     try {
-      const item = await api<ItemDTO>(`/api/upgrade/auto-target${qs({ userItemId: source.id, mode })}`)
+      const item = await api<ItemDTO>(`/api/upgrade/auto-target${qs({ userItemIds: idsKey, mode })}`)
       sfx.click()
       setTarget(item)
-      setState('idle')
-      dial.current?.reset()
-      setResult(null)
     } catch (err) {
       toast.error('Не удалось подобрать цель', (err as ApiError).message)
     } finally {
@@ -124,31 +207,31 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   }
 
   function reset() {
-    setSource(null)
+    setSources([])
     setTarget(null)
-    setResult(null)
     setState('idle')
     dial.current?.reset()
   }
 
-  const done = state === 'win' || state === 'loss'
   const chanceNum = preview ? Number(preview.chance) : null
 
   return (
     <div className="container-page">
       <PageHeader
         eyebrow="Upgrade"
-        title="Апгрейд предмета"
-        description={`Выберите предмет и цель дороже минимум в ${config.minMultiplier}×. Чем выше множитель — тем ниже шанс.`}
+        title="Апгрейд предметов"
+        description={`Выберите до ${MAX_SOURCES} своих предметов и цель дороже минимум в ${config.minMultiplier}× их суммы. Чем выше множитель — тем ниже шанс.`}
         actions={<SoundToggle />}
       />
 
       <section id="upgrade-panel" className="card grid scroll-mt-20 items-stretch gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8" aria-label="Апгрейд">
-        <UpgradeCard label="Ваш предмет" item={source?.item ?? null} placeholder="Выберите предмет из инвентаря ниже" onClear={spinning ? undefined : () => { setSource(null); setState('idle') }} highlight={state === 'loss' ? 'loss' : null} />
+        <SourcesSlot sources={sources} onRemove={(id) => setSources((c) => c.filter((s) => s.id !== id))} disabled={spinning} state={state} />
         <div className="flex flex-col items-center justify-center gap-4 py-2">
           <ArrowRight className="hidden size-5 text-subtle lg:block" />
           <ArrowDown className="size-5 text-subtle lg:hidden" />
-          <UpgradeDial ref={dial} chance={chanceNum} state={state} />
+          <div ref={dialBox} className="flex w-full justify-center">
+            <UpgradeDial ref={dial} chance={chanceNum} state={state} />
+          </div>
           <dl className="grid w-full max-w-[280px] grid-cols-2 gap-2 text-center text-xs">
             <div className="rounded-md border border-border bg-bg px-2 py-2">
               <dt className="text-muted">Выигрыш</dt>
@@ -174,8 +257,12 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
               </Button>
             </Link>
           )}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-muted select-none">
+            <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} className="size-4 accent-[#7C5CFF]" data-testid="upgrade-fast" />
+            <Zap className="size-3.5" /> Быстрая прокрутка
+          </label>
         </div>
-        <UpgradeCard label="Цель" item={target} placeholder="Выберите целевой предмет из списка" onClear={spinning ? undefined : () => { setTarget(null); setState('idle') }} highlight={state === 'win' ? 'win' : null} />
+        <UpgradeCard label="Цель" item={target} placeholder="Выберите цель из списка или кнопкой ниже" onClear={spinning ? undefined : () => { setTarget(null); resetOutcome() }} highlight={state === 'win' ? 'win' : null} />
       </section>
 
       <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6" role="group" aria-label="Быстрый выбор цели">
@@ -203,9 +290,16 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <section aria-label="Инвентарь для апгрейда">
-          <h2 className="mb-4 font-display text-lg font-bold">Ваш инвентарь</h2>
+          <h2 className="mb-4 flex items-center justify-between font-display text-lg font-bold">
+            Ваш инвентарь
+            {sources.length > 0 && (
+              <button onClick={() => setSources([])} disabled={spinning} className="text-xs font-normal text-muted hover:text-text">
+                Снять выбор ({sources.length})
+              </button>
+            )}
+          </h2>
           {!authed ? (
-            <EmptyState title="Войдите в аккаунт" description="Чтобы выбрать предмет для апгрейда, нужно войти." action={<Link href="/login?next=/upgrade"><Button>Войти</Button></Link>} />
+            <EmptyState title="Войдите в аккаунт" description="Чтобы выбрать предметы для апгрейда, нужно войти." action={<Link href="/login?next=/upgrade"><Button>Войти</Button></Link>} />
           ) : inv.error ? (
             <ErrorState description={inv.error.message} onRetry={inv.reload} />
           ) : !inv.data ? (
@@ -220,13 +314,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
             <>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {inv.data.items.map((e) => (
-                  <ItemCard
-                    key={e.id}
-                    item={e.item}
-                    size="sm"
-                    selected={source?.id === e.id}
-                    onClick={spinning ? undefined : () => { setSource(e); setState('idle'); setResult(null); if (target && D(target.price).lt(D(e.item.price).mul(config.minMultiplier))) setTarget(null); setTPage(1) }}
-                  />
+                  <ItemCard key={e.id} item={e.item} size="sm" selected={sources.some((s) => s.id === e.id)} onClick={spinning ? undefined : () => toggleSource(e)} />
                 ))}
               </div>
               <div className="mt-5">
@@ -260,7 +348,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
             <>
               <div className={`grid grid-cols-2 gap-2.5 sm:grid-cols-3 ${targets.loading ? 'opacity-60' : ''}`}>
                 {targets.data.items.map((i) => {
-                  const ratio = source ? D(i.price).div(source.item.price) : null
+                  const ratio = sources.length ? D(i.price).div(sourceValue) : null
                   const tooFar = ratio ? ratio.gt(config.maxMultiplier) : false
                   return (
                     <ItemCard
@@ -269,7 +357,15 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
                       size="sm"
                       dimmed={tooFar}
                       selected={target?.id === i.id}
-                      onClick={spinning || tooFar ? undefined : () => { setTarget(i); setState('idle'); setResult(null); if (window.innerWidth < 1024) document.getElementById('upgrade-panel')?.scrollIntoView({ behavior: 'smooth' }) }}
+                      onClick={
+                        spinning || tooFar
+                          ? undefined
+                          : () => {
+                              setTarget(i)
+                              resetOutcome()
+                              if (window.innerWidth < 1024) document.getElementById('upgrade-panel')?.scrollIntoView({ behavior: 'smooth' })
+                            }
+                      }
                       topRight={ratio ? <span className="rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-bold text-accent tnum">×{ratio.toDecimalPlaces(1).toString()}</span> : undefined}
                     />
                   )
@@ -282,6 +378,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
           )}
         </section>
       </div>
+      {celebrate && <WinCelebration origin={celebrate} color={celebrate.color} onDone={onCelebrationDone} />}
     </div>
   )
 }

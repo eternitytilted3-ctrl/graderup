@@ -11,7 +11,7 @@ const C = 2 * Math.PI * R
 
 export interface UpgradeDialHandle {
   /** Spins the pointer ~5 turns and lands on the server roll (0..1 of the circle). */
-  spin: (rollFraction: number) => Promise<void>
+  spin: (rollFraction: number, opts?: { fast?: boolean }) => Promise<void>
   reset: () => void
 }
 
@@ -30,14 +30,14 @@ export const UpgradeDial = forwardRef<UpgradeDialHandle, { chance: number | null
       anim.current = null
       if (pointer.current) pointer.current.style.transform = 'rotate(0deg)'
     },
-    async spin(rollFraction: number) {
+    async spin(rollFraction: number, opts?: { fast?: boolean }) {
       const el = pointer.current
       if (!el) return
       anim.current?.cancel()
-      const end = 5 * 360 + rollFraction * 360
+      const end = (opts?.fast ? 2 : 5) * 360 + rollFraction * 360
       sfx.upgradeStart()
       const a = el.animate([{ transform: 'rotate(0deg)' }, { transform: `rotate(${end}deg)` }], {
-        duration: 4200,
+        duration: opts?.fast ? 1100 : 4200,
         easing: 'cubic-bezier(0.12, 0.72, 0.1, 1)',
         fill: 'forwards',
       })

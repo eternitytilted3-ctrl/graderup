@@ -5,48 +5,54 @@ import { CaseCard } from '@/components/domain/CaseCard'
 import { Filter } from '@/components/ui/Filter'
 import { Search } from '@/components/ui/Search'
 import { EmptyState } from '@/components/ui/States'
-import type { CaseDTO } from '@/lib/types'
+import type { CaseCategoryDTO, CaseDTO } from '@/lib/types'
 
 const PRICE = [
-  { value: 'all', label: 'Все' },
-  { value: 'lt5', label: 'До 500 C' },
-  { value: '5-25', label: '500 – 2 500 C' },
-  { value: '25-100', label: '2 500 – 10 000 C' },
-  { value: 'gt100', label: 'От 10 000 C' },
+  { value: 'all', label: 'Все', min: 0, max: Infinity },
+  { value: 'lt50', label: 'До 50 C', min: 0, max: 50 },
+  { value: '50-150', label: '50 – 150 C', min: 50, max: 150 },
+  { value: '150-500', label: '150 – 500 C', min: 150, max: 500 },
+  { value: '500-2000', label: '500 – 2 000 C', min: 500, max: 2000 },
+  { value: 'gt2000', label: 'От 2 000 C', min: 2000, max: Infinity },
 ] as const
 type PriceFilter = (typeof PRICE)[number]['value']
 
-export function CasesCatalog({ cases }: { cases: CaseDTO[] }) {
+export function CasesCatalog({ sections }: { sections: { category: CaseCategoryDTO; cases: CaseDTO[] }[] }) {
   const [q, setQ] = useState('')
   const [price, setPrice] = useState<PriceFilter>('all')
-  const [sort, setSort] = useState<'price_asc' | 'price_desc' | 'featured'>('featured')
-  const list = useMemo(() => {
-    const inRange = (p: number) =>
-      price === 'all' || (price === 'lt5' && p < 500) || (price === '5-25' && p >= 500 && p < 2500) || (price === '25-100' && p >= 2500 && p < 10000) || (price === 'gt100' && p >= 10000)
-    const out = cases.filter((c) => inRange(Number(c.price)) && (!q || c.name.toLowerCase().includes(q.toLowerCase())))
-    if (sort === 'price_asc') out.sort((a, b) => Number(a.price) - Number(b.price))
-    if (sort === 'price_desc') out.sort((a, b) => Number(b.price) - Number(a.price))
-    if (sort === 'featured') out.sort((a, b) => Number(b.isFeatured) - Number(a.isFeatured))
-    return out
-  }, [cases, q, price, sort])
+  const visible = useMemo(() => {
+    const range = PRICE.find((p) => p.value === price)!
+    return sections
+      .map((s) => ({
+        ...s,
+        cases: s.cases.filter((c) => {
+          const p = Number(c.price)
+          return p >= range.min && p < range.max && (!q || c.name.toLowerCase().includes(q.toLowerCase()))
+        }),
+      }))
+      .filter((s) => s.cases.length > 0)
+  }, [sections, q, price])
 
   return (
     <>
-      <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <Filter options={[...PRICE]} value={price} onChange={setPrice} ariaLabel="Фильтр по цене" />
-        <div className="flex gap-2">
-          <Search value={q} onChange={setQ} placeholder="Поиск кейса" className="flex-1 lg:w-60" />
-          <select className="input h-10 w-auto pr-8" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Сортировка">
-            <option value="featured">Популярные</option>
-            <option value="price_asc">Сначала дешёвые</option>
-            <option value="price_desc">Сначала дорогие</option>
-          </select>
-        </div>
+      <div className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <Filter options={PRICE.map(({ value, label }) => ({ value, label }))} value={price} onChange={setPrice} ariaLabel="Фильтр по цене" />
+        <Search value={q} onChange={setQ} placeholder="Поиск кейса" className="lg:w-64" />
       </div>
-      {list.length ? (
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
-          {list.map((c, i) => (
-            <CaseCard key={c.id} c={c} priority={i < 4} />
+      {visible.length ? (
+        <div className="space-y-12">
+          {visible.map((s, si) => (
+            <section key={s.category.id} aria-labelledby={`cat-${s.category.slug}`}>
+              <h2 id={`cat-${s.category.slug}`} className="h-tactical mb-4 flex items-center gap-3 text-2xl sm:text-[28px]">
+                {s.category.name}
+                <span className="h-px flex-1 bg-gradient-to-r from-border-strong to-transparent" aria-hidden />
+              </h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5" data-testid="case-section">
+                {s.cases.map((c, i) => (
+                  <CaseCard key={c.id} c={c} priority={si === 0 && i < 4} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       ) : (

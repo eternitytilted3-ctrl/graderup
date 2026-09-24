@@ -8,6 +8,15 @@ async function emailLogin(page: import('@playwright/test').Page, login: string, 
   await page.click('button[type=submit]')
 }
 
+test('cases catalogue: category sections, price chips, no sort dropdown', async ({ page }) => {
+  await page.goto('/cases')
+  for (const name of ['Бюджетные', 'Классика', 'Limited']) await expect(page.getByRole('heading', { name })).toBeVisible()
+  await expect(page.getByLabel('Сортировка')).toHaveCount(0)
+  await page.getByRole('radio', { name: 'До 50 C' }).click()
+  await expect(page.getByText('Магнум', { exact: true })).toBeVisible()
+  await expect(page.getByText('Премиум', { exact: true })).toHaveCount(0)
+})
+
 test('auth page: Steam is the primary sign-in, public email sign-up is disabled', async ({ page, request }) => {
   await page.goto('/')
   await page.getByRole('link', { name: /Авторизация/ }).first().click()
@@ -42,34 +51,38 @@ test.describe.serial('user journey', () => {
     await page.getByTestId('deposit-submit').click()
     await page.waitForURL(/\/deposit\/checkout\//)
     await page.getByTestId('mock-pay').click()
-    await expect.poll(readBalance, { timeout: 20_000 }).toBe(start + 500)
+    await expect.poll(async () => Math.round((await readBalance()) * 100), { timeout: 20_000 }).toBe(Math.round((start + 500) * 100))
 
     // Open a case (fast mode) and sell the drop from the result modal.
-    await page.goto('/cases/starter')
+    await page.goto('/cases/magnum')
     await page.getByLabel('Быстрое открытие').check()
     await page.getByTestId('open-case').click()
     await expect(page.getByTestId('drop-name')).toBeVisible({ timeout: 15_000 })
-    await page.getByRole('button', { name: /Продать/ }).click()
+    await page.getByTestId('sell-all').click()
     await expect(page.getByText(/Продано за/)).toBeVisible()
 
-    // Open two more for upgrade material.
-    for (let i = 0; i < 2; i++) {
-      await page.getByTestId('open-case').click()
-      await expect(page.getByTestId('drop-name')).toBeVisible({ timeout: 15_000 })
-      await page.getByRole('button', { name: /В инвентарь/ }).click()
-    }
+    // Open ×3 at once: three reels, three drops, keep them for the upgrade.
+    await page.getByTestId('count-3').click()
+    await expect(page.getByTestId('open-case')).toContainText('3 кейса')
+    await page.getByTestId('open-case').click()
+    await expect(page.getByTestId('drop-name')).toHaveCount(3, { timeout: 15_000 })
+    await page.getByRole('button', { name: /В инвентарь/ }).click()
 
     await page.goto('/inventory')
     await expect(page.getByText(/\d+ предметов/)).toBeVisible()
 
     // Upgrade: pick first inventory item, quick "×2" picks a target server-side, dial spins.
     await page.goto('/upgrade')
-    await page.locator('section[aria-label="Инвентарь для апгрейда"] button').first().click()
+    const invCards = page.locator('section[aria-label="Инвентарь для апгрейда"] button[aria-pressed]')
+    await invCards.nth(0).click()
+    await invCards.nth(1).click()
+    await expect(page.getByText(/Ваши предметы · 2\/5/)).toBeVisible()
+    await page.getByTestId('upgrade-fast').check()
     await page.getByTestId('quick-x2').click()
     await expect(page.getByTestId('upgrade-chance')).toHaveText(/\d+\.\d{2}%/, { timeout: 10_000 })
     await page.getByTestId('upgrade-button').click()
     // The pointer must actually rotate while spinning.
-    await page.waitForTimeout(800)
+    await page.waitForTimeout(300)
     const rotating = await page.evaluate(() => document.getAnimations().some((a) => a.playState === 'running'))
     expect(rotating).toBe(true)
     await expect(page.getByText(/Апгрейд (успешен|не удался)/)).toBeVisible({ timeout: 15_000 })
@@ -104,8 +117,16 @@ test('admin: case editor warns on invalid probability, balance adjust is audited
   await page.waitForURL((u) => !u.pathname.startsWith('/login'))
 
   await page.goto('/admin/cases')
-  await page.getByText('Starter', { exact: true }).click()
+  await page.getByText('Магнум', { exact: true }).click()
   await expect(page.getByText('Total probability')).toBeVisible()
+  // Custom case image upload: real PNG accepted, SVG rejected by magic-byte check.
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64)])
+  await page.getByTestId('image-upload').setInputFiles({ name: 'crate.png', mimeType: 'image/png', buffer: png })
+  await expect(page.locator('input[name=image]')).toHaveValue(/^\/api\/uploads\/[a-f0-9]{32}\.png$/)
+  const uploaded = await page.locator('input[name=image]').inputValue()
+  expect((await page.request.get(uploaded)).headers()['content-type']).toBe('image/png')
+  await page.getByTestId('image-upload').setInputFiles({ name: 'evil.png', mimeType: 'image/png', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') })
+  await expect(page.getByText(/Допустимы только PNG, JPEG или WebP/)).toBeVisible()
   const first = page.locator('input[aria-label^="Шанс"]').first()
   await first.fill('99')
   await expect(page.getByText(/Сумма вероятностей .* ≠ 100%/)).toBeVisible()

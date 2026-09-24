@@ -206,7 +206,7 @@ async function main() {
       await adjustBalance(admin.id, userId, amount.toFixed(2), 'Demo balance (seed)')
     }
   }
-  const caseSlugs = ['starter', 'neon-rush', 'emerald', 'night-ops', 'violet-core']
+  const caseSlugs = ['magnum', 'exposure', 'neo', 'steel', 'fog', 'green']
   for (const [i, u] of demo.entries()) {
     await deposit(u.id, [15000, 8000, 6000, 5000][i])
     for (let k = 0; k < 10 + i * 2; k++) {
@@ -218,7 +218,7 @@ async function main() {
     const rest = (await listInventory(u.id, { page: 1, pageSize: 50, sort: 'price_desc' })).items
     for (const src of rest.slice(0, 2)) {
       const targets = await listUpgradeTargets({ minPrice: (Number(src.item.price) * 2).toFixed(2), page: 1, pageSize: 5 })
-      if (targets.items[0]) await performUpgrade(u.id, src.id, targets.items[0].id).catch(() => {})
+      if (targets.items[0]) await performUpgrade(u.id, [src.id], targets.items[0].id).catch(() => {})
     }
     await claimReward(u.id, 'daily').catch(() => {})
   }

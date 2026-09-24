@@ -112,64 +112,96 @@ for (const [name, body] of Object.entries(items)) {
   writeFileSync(join(root, 'items', `${name}.svg`), svg(body))
 }
 
-// Cases: front-facing weapon crate (original drawing) with per-case palette and emblem.
-const emblems = {
-  bolt: 'M104 52 L84 86 H100 L94 112 L118 74 H102 Z',
-  star: 'M100 50 L108 74 H132 L112 88 L120 112 L100 98 L80 112 L88 88 L68 74 H92 Z',
-  ring: 'M100 56 A26 26 0 1 1 99.9 56 Z M100 70 A12 12 0 1 0 100.1 70 Z',
-  diamond: 'M100 50 L126 82 L100 114 L74 82 Z',
-  crown: 'M72 104 L68 64 L88 80 L100 56 L112 80 L132 64 L128 104 Z',
-  flame: 'M100 50 Q128 76 116 102 Q108 116 100 116 Q84 116 80 100 Q76 84 92 72 Q92 86 100 88 Q96 70 100 50 Z',
-  skull: 'M100 54 Q128 54 128 80 Q128 94 118 98 V110 H82 V98 Q72 94 72 80 Q72 54 100 54 Z M88 78 A6 6 0 1 0 88.1 78 Z M112 78 A6 6 0 1 0 112.1 78 Z',
-  leaf: 'M76 108 Q76 60 128 56 Q126 108 76 108 Z M80 104 L120 62',
-  wave: 'M70 90 Q85 70 100 90 T130 90 M70 76 Q85 56 100 76 T130 76',
-  eye: 'M68 82 Q100 50 132 82 Q100 114 68 82 Z M100 72 A10 10 0 1 0 100.1 72 Z',
-  moon: 'M112 54 A30 30 0 1 0 128 102 A24 24 0 1 1 112 54 Z',
-  cube: 'M100 54 L126 68 V98 L100 112 L74 98 V68 Z M74 68 L100 82 L126 68 M100 82 V112',
-}
-
-const palettes = [
-  ['starter', '#6B7686', '#2B313B', 'bolt'],
-  ['neon-rush', '#22C3E6', '#0F4A5C', 'wave'],
-  ['emerald', '#3FAE5A', '#15401F', 'leaf'],
-  ['night-ops', '#4A5361', '#16191F', 'eye'],
-  ['violet-core', '#7C5CFF', '#2B1F66', 'diamond'],
-  ['arctic', '#8FB8D8', '#27435A', 'star'],
-  ['ember', '#E0662A', '#5A1E10', 'flame'],
-  ['lunar', '#8C95C8', '#262B4E', 'moon'],
-  ['phantom', '#A34FD6', '#35104F', 'skull'],
-  ['prism', '#D8324F', '#4A1024', 'ring'],
-  ['royal', '#D9A13A', '#5A3A0C', 'crown'],
-  ['quantum', '#3E7BFF', '#141F66', 'cube'],
+// Cases: 3/4-perspective weapon crates (original drawing) — lid, front, side, ribs, latches,
+// rivets, stencil, scratches, optional hazard band, and a large weapon silhouette on the front panel.
+const crateTheme = [
+  // slug, main, dark, accent, weapon art, hazard band
+  ['magnum', '#6d7480', '#2a2f37', '#ffb547', 'pistol', false],
+  ['exposure', '#c8742e', '#4a2410', '#ffe0a8', 'smg', false],
+  ['sprint', '#2f8f9d', '#0f3940', '#7ff0ff', 'pistol', false],
+  ['ricochet', '#8b5a2b', '#352010', '#ffd27a', 'shotgun', false],
+  ['neo', '#7c5cff', '#241a5e', '#00d4ff', 'smg', false],
+  ['steel', '#9aa5b4', '#39414d', '#e8eef6', 'rifle', false],
+  ['desert', '#c9a76a', '#5b4524', '#fff1c9', 'rifle', false],
+  ['fog', '#3b4452', '#12161c', '#9fb0c8', 'sniper', false],
+  ['green', '#3aa55a', '#133d20', '#c6ff9e', 'rifle', false],
+  ['yellow', '#e0b12f', '#5e4308', '#fff3b0', 'sniper', false],
+  ['blue', '#2f6fe0', '#0d2560', '#bfe0ff', 'rifle', false],
+  ['red', '#d6334f', '#4f0c1a', '#ffc2cd', 'sniper', true],
+  ['blade', '#2b2f36', '#0c0e11', '#e4ae39', 'karambit', true],
+  ['gloves', '#8d3fd6', '#2c0e4d', '#f0c8ff', 'gloves', true],
+  ['aurora', '#23b3a6', '#0a3c46', '#b6fff5', 'blade', true],
+  ['monolith', '#4a4f58', '#15171b', '#ff5570', 'sniper', true],
+  ['premium', '#d9a13a', '#4f3208', '#fff4d0', 'karambit', true],
 ]
 
-for (const [slug, light, deep, emblem] of palettes) {
-  const id = slug.replace(/-/g, '')
-  const body = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" fill="none">
+let rs = 1
+const rnd = () => ((rs = (rs * 48271) % 2147483647) / 2147483647)
+
+for (const [slug, main, dark, accent, art, hazard] of crateTheme) {
+  rs = [...slug].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647 || 1
+  const id = slug.replace(/[^a-z]/g, '')
+  // Scratches (weathering)
+  let scratches = ''
+  for (let i = 0; i < 26; i++) {
+    const x = 30 + rnd() * 170
+    const y = 72 + rnd() * 92
+    const l = 4 + rnd() * 14
+    const a = (rnd() - 0.5) * 1.2
+    scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} l${(l * Math.cos(a)).toFixed(1)} ${(l * Math.sin(a)).toFixed(1)}" stroke="#fff" stroke-opacity="${(0.05 + rnd() * 0.12).toFixed(2)}" stroke-width="${(0.6 + rnd()).toFixed(1)}"/>`
+  }
+  const rivets = [
+    [28, 70], [192, 70], [28, 160], [192, 160], [110, 70], [110, 160],
+  ].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2" fill="url(#${id}m)"/><circle cx="${x - 0.6}" cy="${y - 0.6}" r="0.8" fill="#fff" fill-opacity=".7"/>`).join('')
+  const hazardBand = hazard
+    ? `<clipPath id="${id}hz"><rect x="22" y="150" width="176" height="18"/></clipPath>
+       <g clip-path="url(#${id}hz)">${Array.from({ length: 16 }, (_, i) => `<path d="M${14 + i * 14} 168 l12 -18 h7 l-12 18 z" fill="${accent}" fill-opacity=".85"/>`).join('')}</g>
+       <rect x="22" y="150" width="176" height="18" fill="none" stroke="#000" stroke-opacity=".35"/>`
+    : `<rect x="22" y="152" width="176" height="14" fill="#000" fill-opacity=".22"/>`
+  const weapon = items[art]
+  const body = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 190" fill="none">
   <defs>
-    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${deep}"/></linearGradient>
-    <linearGradient id="${id}l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${light}"/><stop offset=".6" stop-color="${deep}"/></linearGradient>
-    <linearGradient id="${id}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8E2D0"/><stop offset="1" stop-color="#8A7E62"/></linearGradient>
-    <radialGradient id="${id}g" cx=".5" cy=".6" r=".5"><stop offset="0" stop-color="${light}" stop-opacity=".35"/><stop offset="1" stop-color="${light}" stop-opacity="0"/></radialGradient>
-    <filter id="${id}s" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity=".55"/></filter>
+    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${main}"/><stop offset="1" stop-color="${dark}"/></linearGradient>
+    <linearGradient id="${id}t" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${main}"/><stop offset=".5" stop-color="${main}" stop-opacity=".95"/><stop offset="1" stop-color="${dark}"/></linearGradient>
+    <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${dark}"/><stop offset="1" stop-color="#07090c"/></linearGradient>
+    <linearGradient id="${id}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1ede2"/><stop offset="1" stop-color="#8a8272"/></linearGradient>
+    <linearGradient id="${id}p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>
+    <radialGradient id="${id}g" cx=".5" cy=".62" r=".55"><stop offset="0" stop-color="${accent}" stop-opacity=".35"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient>
+    <linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f6fa"/><stop offset="1" stop-color="#9aa3b3"/></linearGradient>
+    <linearGradient id="d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4457"/><stop offset="1" stop-color="#151a24"/></linearGradient>
+    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${accent}"/><stop offset="1" stop-color="${main}"/></linearGradient>
+    <filter id="${id}sh" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="7" flood-color="#000" flood-opacity=".6"/></filter>
+    <filter id="${id}ws" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000" flood-opacity=".7"/></filter>
   </defs>
-  <ellipse cx="110" cy="90" rx="104" ry="64" fill="url(#${id}g)"/>
-  <g filter="url(#${id}s)">
-    <path d="M22 50 Q22 34 38 32 H182 Q198 34 198 50 V60 H22 Z" fill="url(#${id}l)"/>
-    <rect x="22" y="58" width="176" height="84" rx="6" fill="url(#${id}f)"/>
-    <path d="M22 62 H198" stroke="#000" stroke-opacity=".45" stroke-width="3"/>
-    <path d="M40 36 V58 M70 34 V58 M150 34 V58 M180 36 V58" stroke="#000" stroke-opacity=".22" stroke-width="3"/>
-    <path d="M30 70 V134 M190 70 V134" stroke="#000" stroke-opacity=".25" stroke-width="4"/>
-    <rect x="22" y="58" width="176" height="84" rx="6" stroke="#fff" stroke-opacity=".12" stroke-width="1.5"/>
-    <rect x="44" y="52" width="16" height="22" rx="2" fill="url(#${id}m)"/>
-    <rect x="160" y="52" width="16" height="22" rx="2" fill="url(#${id}m)"/>
-    <rect x="48" y="66" width="8" height="5" rx="1" fill="#3b3426"/>
-    <rect x="164" y="66" width="8" height="5" rx="1" fill="#3b3426"/>
-    <rect x="198" y="84" width="8" height="30" rx="2" fill="#000" fill-opacity=".35"/>
-    <rect x="14" y="84" width="8" height="30" rx="2" fill="#000" fill-opacity=".35"/>
-    <path d="M40 132 H180" stroke="#fff" stroke-opacity=".08" stroke-width="2"/>
-    <g transform="translate(46 30) scale(.64)"><path d="${emblems[emblem]}" fill="url(#${id}m)" fill-rule="evenodd" stroke="#2b2418" stroke-opacity=".6" stroke-width="3"/></g>
-    <text x="110" y="134" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="10" letter-spacing="3" fill="#000" fill-opacity=".35">GRADERUP</text>
+  <ellipse cx="128" cy="112" rx="124" ry="78" fill="url(#${id}g)"/>
+  <g filter="url(#${id}sh)">
+    <!-- side -->
+    <path d="M200 58 L238 36 V144 L200 170 Z" fill="url(#${id}s)"/>
+    <path d="M206 70 L232 55 M206 150 L232 134" stroke="#000" stroke-opacity=".35" stroke-width="4"/>
+    <rect x="212" y="90" width="16" height="30" rx="3" transform="skewY(-30) translate(0 124)" fill="#000" fill-opacity=".35"/>
+    <!-- lid -->
+    <path d="M20 58 L200 58 L238 36 L60 36 Z" fill="url(#${id}t)"/>
+    <path d="M20 58 L200 58 L238 36" stroke="#fff" stroke-opacity=".35" stroke-width="1.3"/>
+    <path d="M58 52 L210 52 M72 44 L226 44" stroke="#000" stroke-opacity=".18" stroke-width="3"/>
+    <!-- front -->
+    <rect x="20" y="58" width="180" height="112" rx="3" fill="url(#${id}f)"/>
+    <rect x="20" y="58" width="180" height="10" fill="#000" fill-opacity=".3"/>
+    ${hazardBand}
+    <rect x="20" y="58" width="12" height="112" fill="#000" fill-opacity=".25"/>
+    <rect x="188" y="58" width="12" height="112" fill="#000" fill-opacity=".3"/>
+    <!-- panel with weapon -->
+    <rect x="42" y="76" width="136" height="68" rx="4" fill="url(#${id}p)" stroke="${accent}" stroke-opacity=".45" stroke-width="1.2"/>
+    <path d="M46 80 h18 M46 80 v10 M174 140 h-18 M174 140 v-10" stroke="${accent}" stroke-opacity=".8" stroke-width="1.6"/>
+    <g transform="translate(47 74) scale(.63)" filter="url(#${id}ws)">${weapon}</g>
+    ${scratches}
+    ${rivets}
+    <!-- latches -->
+    <rect x="44" y="50" width="20" height="26" rx="2.5" fill="url(#${id}m)"/><rect x="49" y="66" width="10" height="6" rx="1" fill="#2e281c"/>
+    <rect x="156" y="50" width="20" height="26" rx="2.5" fill="url(#${id}m)"/><rect x="161" y="66" width="10" height="6" rx="1" fill="#2e281c"/>
+    <!-- padlock -->
+    <rect x="102" y="60" width="16" height="13" rx="2" fill="url(#${id}m)"/><path d="M105 60 v-4 a5 5 0 0 1 10 0 v4" stroke="url(#${id}m)" stroke-width="2.4" fill="none"/>
+    <text x="110" y="${hazard ? 184 : 162}" opacity="${hazard ? 0 : 1}" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="9" letter-spacing="3" fill="#000" fill-opacity=".45">GRADERUP</text>
+    <rect x="20" y="58" width="180" height="112" rx="3" stroke="#fff" stroke-opacity=".12"/>
   </g>
 </svg>
 `
@@ -185,7 +217,7 @@ writeFileSync(
 </svg>
 `,
 )
-console.log(`✓ generated ${Object.keys(items).length} item and ${palettes.length} case images`)
+console.log(`✓ generated ${Object.keys(items).length} item and ${crateTheme.length} case images`)
 
 // Topographic contour pattern (tileable-ish), used as a subtle header/body texture.
 {

@@ -12,7 +12,6 @@ export interface RouletteHandle {
   reset: () => void
 }
 
-const CARD = 128
 const GAP = 8
 const PAD = 8
 
@@ -46,7 +45,8 @@ function currentX(el: HTMLElement) {
  * Pure visualization: the winning item and reel come from the server response.
  * Uses the Web Animations API (compositor-driven, unaffected by CSS reduced-motion overrides).
  */
-export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[] }>(function Roulette({ idleItems }, ref) {
+export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[]; compact?: boolean; silent?: boolean }>(function Roulette({ idleItems, compact = false, silent = false }, ref) {
+  const CARD = compact ? 104 : 128
   const wrap = useRef<HTMLDivElement>(null)
   const track = useRef<HTMLDivElement>(null)
   const anim = useRef<Animation | null>(null)
@@ -72,7 +72,7 @@ export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[] }>(fun
       const jitter = (Math.random() - 0.5) * CARD * 0.7 // cosmetic landing offset only
       const target = PAD + winIndex * (CARD + GAP) + CARD / 2 - w / 2 + jitter
       const duration = opts?.fast ? 900 : 6500
-      sfx.caseOpen()
+      if (!silent) sfx.caseOpen()
       const a = el.animate([{ transform: 'translate3d(0,0,0)' }, { transform: `translate3d(${-target}px,0,0)` }], {
         duration,
         easing: 'cubic-bezier(0.08, 0.7, 0.1, 1)',
@@ -87,7 +87,7 @@ export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[] }>(fun
         const x = -currentX(el)
         const idx = Math.floor((x + w / 2 - PAD) / (CARD + GAP))
         if (idx !== last) {
-          if (last !== -1) sfx.tick(Math.abs(x - lastX) / 8)
+          if (last !== -1 && !silent) sfx.tick(Math.abs(x - lastX) / 8)
           last = idx
         }
         lastX = x
@@ -102,10 +102,10 @@ export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[] }>(fun
       cancelAnimationFrame(raf)
       el.style.transform = `translate3d(${-target}px,0,0)`
       setWinner(winIndex)
-      sfx.drop(reel[winIndex].rarity)
+      if (!silent) sfx.drop(reel[winIndex].rarity)
       await new Promise((r) => setTimeout(r, 450))
     },
-    [reset],
+    [reset, CARD, silent],
   )
 
   useImperativeHandle(ref, () => ({ reset, spin }), [reset, spin])
@@ -122,14 +122,14 @@ export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[] }>(fun
             key={`${it.id}-${i}`}
             data-rarity={it.rarity}
             className={cn(
-              'slot-bg relative flex h-36 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border',
+              compact ? 'slot-bg relative flex h-28 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border' : 'slot-bg relative flex h-36 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border',
               winner === i ? 'z-10 scale-105 border-[var(--r)] shadow-[0_0_28px_-4px_var(--r)] transition-transform duration-300' : 'border-border',
               winner !== null && winner !== i && 'opacity-35 transition-opacity duration-300',
             )}
             style={{ width: CARD }}
           >
             <div className="absolute inset-0" style={{ background: 'radial-gradient(70% 60% at 50% 55%, color-mix(in srgb, var(--r) 26%, transparent), transparent 75%)' }} />
-            <img src={it.image} alt="" width={112} height={84} loading="eager" decoding="async" draggable={false} className="relative h-16 w-auto max-w-[112px] object-contain" />
+            <img src={it.image} alt="" width={112} height={84} loading="eager" decoding="async" draggable={false} className={compact ? "relative h-12 w-auto max-w-[92px] object-contain" : "relative h-16 w-auto max-w-[112px] object-contain"} />
             <div className="relative mt-2 w-full truncate px-2 text-center text-[11px] font-semibold">{it.name.split(' | ')[0]}</div>
             <div className="relative w-full truncate px-2 text-center text-[10px] text-muted">{it.name.split(' | ')[1]}</div>
             <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: 'var(--r)' }} />

@@ -36,10 +36,10 @@ test.describe.serial('API security', () => {
   test('client-supplied price/userId/result are ignored; errors are sanitized', async ({ baseURL }) => {
     const h = { origin: baseURL!, 'x-csrf-token': csrf }
     const before = (await (await ctx.get('/api/balance')).json()).balance
-    const open = await ctx.post('/api/cases/starter/open', { headers: h, data: { price: 0, userId: '00000000-0000-0000-0000-000000000000', itemId: 'x' } })
+    const open = await ctx.post('/api/cases/magnum/open', { headers: h, data: { price: 0, userId: '00000000-0000-0000-0000-000000000000', itemId: 'x' } })
     expect(open.ok()).toBeTruthy()
     const after = (await open.json()).balance
-    expect(Number(before) - Number(after)).toBeCloseTo(49, 2)
+    expect(Number(before) - Number(after)).toBeCloseTo(19, 2)
 
     // Upgrade with a fake chance/result is validated server-side
     const bad = await ctx.post('/api/upgrade', { headers: h, data: { userItemId: 'not-a-uuid', targetItemId: 'x', chance: 100, result: 'win' } })
@@ -53,10 +53,10 @@ test.describe.serial('API security', () => {
 
   test('idempotency key replays the same result instead of opening twice', async ({ baseURL }) => {
     const h = { origin: baseURL!, 'x-csrf-token': csrf, 'idempotency-key': `e2e-${Date.now()}-abcdef` }
-    const a = await (await ctx.post('/api/cases/starter/open', { headers: h })).json()
-    const r2 = await ctx.post('/api/cases/starter/open', { headers: h })
+    const a = await (await ctx.post('/api/cases/magnum/open', { headers: h })).json()
+    const r2 = await ctx.post('/api/cases/magnum/open', { headers: h })
     expect(r2.headers()['idempotent-replayed']).toBe('true')
-    expect((await r2.json()).openingId).toBe(a.openingId)
+    expect((await r2.json()).results[0].openingId).toBe(a.results[0].openingId)
   })
 
   test('webhook with a forged signature is rejected', async ({ request }) => {

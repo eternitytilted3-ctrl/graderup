@@ -23,6 +23,7 @@ export interface CaseDTO {
   price: string
   status: 'active' | 'disabled'
   isFeatured?: boolean
+  categoryId?: string | null
   itemCount?: number
   topRarity?: Rarity
 }
@@ -54,14 +55,28 @@ export interface Paginated<T> {
   totalPages: number
 }
 
-export interface OpenCaseResult {
+export interface CaseCategoryDTO {
+  id: string
+  name: string
+  slug: string
+}
+
+export interface OpenCaseDrop {
   openingId: string
   userItemId: string
   item: ItemDTO
   reel: ItemDTO[]
   winIndex: number
-  balance: string
   sellPrice: string
+}
+
+export interface OpenCasesResult {
+  results: OpenCaseDrop[]
+  balance: string
+}
+
+export interface OpenCaseResult extends OpenCaseDrop {
+  balance: string
 }
 
 export interface UpgradeResultDTO {
@@ -71,7 +86,8 @@ export interface UpgradeResultDTO {
   roll: number
   /** Position on the dial, 0..1, derived from the server roll (visualization only). */
   rollFraction: number
-  source: ItemDTO
+  sources: ItemDTO[]
+  sourceValue: string
   target: ItemDTO
   resultUserItemId: string | null
 }

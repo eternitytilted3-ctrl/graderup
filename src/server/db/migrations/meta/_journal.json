@@ -15,6 +15,13 @@
       "when": 1790255079524,
       "tag": "0001_item_market_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790258592592,
+      "tag": "0002_categories_multi",
+      "breakpoints": true
     }
   ]
 }

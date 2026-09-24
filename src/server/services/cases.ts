@@ -2,9 +2,9 @@ import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, sql } from 'drizzle-orm'
 import { D, toMoney } from '@/lib/money'
-import { RARITIES, type CaseDTO, type CaseItemDTO, type ItemDTO, type OpenCaseResult, type Rarity } from '@/lib/types'
+import { RARITIES, type CaseCategoryDTO, type CaseDTO, type CaseItemDTO, type ItemDTO, type OpenCaseDrop, type OpenCaseResult, type OpenCasesResult, type Rarity } from '@/lib/types'
 import { getDb } from '../db/client'
-import { caseItems, caseOpenings, cases, items, userItems, users } from '../db/schema'
+import { caseCategories, caseItems, caseOpenings, cases, items, userItems, users } from '../db/schema'
 import { Errors } from '../http/errors'
 import { secureRandomInt } from '../security/crypto'
 import { applyBalanceChange, lockUser } from './ledger'
@@ -31,6 +31,7 @@ function toCaseDTO(c: typeof cases.$inferSelect, extra: Partial<CaseDTO> = {}): 
     price: c.price,
     status: c.status,
     isFeatured: c.isFeatured,
+    categoryId: c.categoryId,
     ...extra,
   }
 }
@@ -50,6 +51,19 @@ export async function listCases(opts: { includeDisabled?: boolean } = {}): Promi
     .groupBy(cases.id)
     .orderBy(asc(cases.sortOrder), asc(cases.price))
   return rows.map((r) => toCaseDTO(r.c, { itemCount: r.itemCount, topRarity: r.topRarity ?? undefined }))
+}
+
+/** Cases grouped into active categories (catalogue sections); uncategorised cases go last. */
+export async function listCaseCatalog(): Promise<{ category: CaseCategoryDTO; cases: CaseDTO[] }[]> {
+  const [all, cats] = await Promise.all([
+    listCases(),
+    getDb().select().from(caseCategories).where(eq(caseCategories.isActive, true)).orderBy(asc(caseCategories.sortOrder), asc(caseCategories.name)),
+  ])
+  const sections = cats.map((c) => ({ category: { id: c.id, name: c.name, slug: c.slug }, cases: all.filter((x) => x.categoryId === c.id) }))
+  const known = new Set(cats.map((c) => c.id))
+  const rest = all.filter((x) => !x.categoryId || !known.has(x.categoryId))
+  if (rest.length) sections.push({ category: { id: 'other', name: 'Другие', slug: 'other' }, cases: rest })
+  return sections.filter((s) => s.cases.length > 0)
 }
 
 /** Pure weighted pick — exported for tests. `roll` must be in [0, totalWeight). */
@@ -99,18 +113,24 @@ function buildReel(entries: { ci: { dropWeight: number }; item: typeof items.$in
   return reel
 }
 
+export const MAX_OPEN_COUNT = 5
+
 /**
- * Opens a case. The whole operation is one DB transaction:
- * lock user → validate case (price from DB) → server RNG → debit → create item → record opening.
- * Nothing from the client except the case id is trusted.
+ * Opens `count` (1..5) cases in ONE DB transaction:
+ * lock user → validate case (price from DB) → N independent server RNG rolls →
+ * N debits (one ledger row per case) → N items → N openings. All-or-nothing.
+ * Nothing from the client except the case id and count is trusted.
  */
-export async function openCase(userId: string, caseIdOrSlug: string, ip?: string): Promise<OpenCaseResult> {
+export async function openCases(userId: string, caseIdOrSlug: string, count = 1, ip?: string): Promise<OpenCasesResult> {
+  if (!Number.isInteger(count) || count < 1 || count > MAX_OPEN_COUNT) throw Errors.badRequest(`Можно открыть от 1 до ${MAX_OPEN_COUNT} кейсов`)
   const db = getDb()
   const sellRatio = (await getSetting('inventory')).sellRatio
-  const result = await db.transaction(async (tx) => {
-    await lockUser(tx, userId)
+  const out = await db.transaction(async (tx) => {
+    const user = await lockUser(tx, userId)
     const [c] = await tx.select().from(cases).where(caseWhere(caseIdOrSlug))
     if (!c || c.status !== 'active') throw Errors.notFound('Кейс не найден или отключён')
+    // Early check for a clearer error; the ledger re-checks under the same lock.
+    if (D(user.balance).lt(D(c.price).mul(count))) throw Errors.insufficientFunds()
 
     const entries = await tx
       .select({ ci: caseItems, item: items })
@@ -119,50 +139,51 @@ export async function openCase(userId: string, caseIdOrSlug: string, ip?: string
       .where(and(eq(caseItems.caseId, c.id), eq(items.isActive, true)))
       .orderBy(asc(caseItems.id))
     if (entries.length === 0) throw Errors.conflict('Кейс временно недоступен', 'CASE_EMPTY')
-
+    const weighted = entries.map((e) => ({ ...e, dropWeight: e.ci.dropWeight }))
     const totalWeight = entries.reduce((s, e) => s + e.ci.dropWeight, 0)
-    const roll = secureRandomInt(totalWeight)
-    const won = pickByWeight(entries.map((e) => ({ ...e, dropWeight: e.ci.dropWeight })), roll)
 
-    const openingId = randomUUID()
-    const userItemId = randomUUID()
-    const { balanceAfter } = await applyBalanceChange(tx, {
-      userId,
-      type: 'case_open',
-      amount: D(c.price).neg(),
-      referenceType: 'case_opening',
-      referenceId: openingId,
-      meta: { caseId: c.id, caseName: c.name, itemId: won.item.id, itemName: won.item.name, itemPrice: won.item.price, rarity: won.item.rarity },
-    })
-    await tx.insert(userItems).values({ id: userItemId, userId, itemId: won.item.id, source: 'case', sourceReference: openingId })
-    await tx.insert(caseOpenings).values({
-      id: openingId,
-      userId,
-      caseId: c.id,
-      itemId: won.item.id,
-      userItemId,
-      price: c.price,
-      roll,
-      totalWeight,
-    })
-    const winner = toItemDTO(won.item)
-    return {
-      openingId,
-      userItemId,
-      item: winner,
-      reel: buildReel(entries, totalWeight, winner),
-      winIndex: REEL_WIN_INDEX,
-      balance: balanceAfter,
-      sellPrice: toMoney(D(won.item.price).mul(sellRatio), 1),
-      caseId: c.id,
-      price: c.price,
+    const drops: OpenCaseDrop[] = []
+    let balance = user.balance
+    for (let n = 0; n < count; n++) {
+      const roll = secureRandomInt(totalWeight)
+      const won = pickByWeight(weighted, roll)
+      const openingId = randomUUID()
+      const userItemId = randomUUID()
+      const r = await applyBalanceChange(tx, {
+        userId,
+        type: 'case_open',
+        amount: D(c.price).neg(),
+        referenceType: 'case_opening',
+        referenceId: openingId,
+        meta: { caseId: c.id, caseName: c.name, itemId: won.item.id, itemName: won.item.name, itemPrice: won.item.price, rarity: won.item.rarity },
+      })
+      balance = r.balanceAfter
+      await tx.insert(userItems).values({ id: userItemId, userId, itemId: won.item.id, source: 'case', sourceReference: openingId })
+      await tx.insert(caseOpenings).values({ id: openingId, userId, caseId: c.id, itemId: won.item.id, userItemId, price: c.price, roll, totalWeight })
+      const winner = toItemDTO(won.item)
+      drops.push({
+        openingId,
+        userItemId,
+        item: winner,
+        reel: buildReel(entries, totalWeight, winner),
+        winIndex: REEL_WIN_INDEX,
+        sellPrice: toMoney(D(won.item.price).mul(sellRatio), 1),
+      })
     }
+    return { results: drops, balance, caseId: c.id, price: c.price }
   })
-  void logEvent('case_open', { userId, ip, details: { caseId: result.caseId, price: result.price, itemId: result.item.id, openingId: result.openingId } })
-  const { caseId, price, ...out } = result
-  void caseId
-  void price
-  return out
+  void logEvent('case_open', {
+    userId,
+    ip,
+    details: { caseId: out.caseId, price: out.price, count, items: out.results.map((r) => r.item.id), openings: out.results.map((r) => r.openingId) },
+  })
+  return { results: out.results, balance: out.balance }
+}
+
+/** Single-case convenience wrapper (used by seed/tests). */
+export async function openCase(userId: string, caseIdOrSlug: string, ip?: string): Promise<OpenCaseResult> {
+  const r = await openCases(userId, caseIdOrSlug, 1, ip)
+  return { ...r.results[0], balance: r.balance }
 }
 
 /** Public feed of recent drops (usernames only). */

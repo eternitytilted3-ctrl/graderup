@@ -14,3 +14,4 @@ test-results/
 screenshots/
 .DS_Store
 npm-debug.log*
+uploads/
