@@ -71,7 +71,7 @@ export default async function HomePage() {
             ))}
           </dl>
         </div>
-        <div className="relative hidden h-[340px] md:block" aria-hidden>
+        <div className="relative hidden h-[340px] overflow-hidden rounded-[28px] md:block" aria-hidden>
           <div className="absolute inset-0 rounded-[28px] border border-border bg-[radial-gradient(60%_60%_at_50%_50%,rgb(124_92_255/0.18),transparent_70%)]" />
           <div className="absolute inset-x-10 top-1/2 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           {heroCases.map((c, i) => (

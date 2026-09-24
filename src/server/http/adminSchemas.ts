@@ -19,6 +19,8 @@ export const itemSchema = z.object({
   rarity: z.enum(RARITIES as ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic']),
   description: z.string().trim().max(1000).optional(),
   isActive: z.boolean().optional(),
+  marketHashName: z.string().trim().max(200).nullable().optional(),
+  priceLocked: z.boolean().optional(),
 })
 
 export const caseSchema = z.object({

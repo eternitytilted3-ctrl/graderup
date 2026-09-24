@@ -131,10 +131,19 @@ export const items = pgTable(
     rarity: rarity('rarity').notNull(),
     description: text('description').notNull().default(''),
     isActive: boolean('is_active').notNull().default(true),
+    /** External market identifier (e.g. CS2 "AK-47 | Redline (Field-Tested)") used for price sync. */
+    marketHashName: varchar('market_hash_name', { length: 200 }),
+    /** Raw market price from the price provider, before markup. */
+    marketPrice: numeric('market_price', { precision: 18, scale: 2 }),
+    priceSource: varchar('price_source', { length: 32 }),
+    priceUpdatedAt: timestamp('price_updated_at', { withTimezone: true }),
+    /** When true, price sync never overwrites the manually set price. */
+    priceLocked: boolean('price_locked').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
+    uniqueIndex('items_market_hash_name_uq').on(t.marketHashName),
     index('items_rarity_idx').on(t.rarity),
     index('items_price_idx').on(t.price),
     check('items_price_positive', sql`${t.price} > 0`),

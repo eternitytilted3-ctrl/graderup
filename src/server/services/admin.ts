@@ -238,6 +238,8 @@ export interface ItemInput {
   rarity: Rarity
   description?: string
   isActive?: boolean
+  marketHashName?: string | null
+  priceLocked?: boolean
 }
 
 export async function listItemsAdmin(opts: { q?: string; rarity?: Rarity; page: number; pageSize: number }) {
@@ -257,7 +259,15 @@ export async function listItemsAdmin(opts: { q?: string; rarity?: Rarity; page: 
     db.select({ total: count() }).from(items).where(where),
   ])
   return paginate(
-    rows.map((i) => ({ ...toItemDTO(i, true), isActive: i.isActive })),
+    rows.map((i) => ({
+      ...toItemDTO(i, true),
+      isActive: i.isActive,
+      marketHashName: i.marketHashName,
+      marketPrice: i.marketPrice,
+      priceSource: i.priceSource,
+      priceUpdatedAt: i.priceUpdatedAt?.toISOString() ?? null,
+      priceLocked: i.priceLocked,
+    })),
     total,
     opts.page,
     opts.pageSize,
@@ -272,8 +282,14 @@ export async function saveItem(adminId: string, id: string | null, input: ItemIn
     rarity: input.rarity,
     description: input.description ?? '',
     isActive: input.isActive ?? true,
+    marketHashName: input.marketHashName || null,
+    priceLocked: input.priceLocked ?? false,
   }
   return getDb().transaction(async (tx) => {
+    if (values.marketHashName) {
+      const [dup] = await tx.select({ id: items.id }).from(items).where(eq(items.marketHashName, values.marketHashName))
+      if (dup && dup.id !== id) throw Errors.validation({ fields: { marketHashName: 'Уже привязан к другому предмету' } })
+    }
     let row
     if (id) {
       ;[row] = await tx

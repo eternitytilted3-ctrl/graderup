@@ -39,6 +39,13 @@ export const settingSchemas = {
     /** Bonus the invited user receives on first deposit, percent. */
     inviteeBonusPercent: z.number().min(0).max(100),
   }),
+  pricing: z.object({
+    /** none | skinport | steam | mock (PRICE_PROVIDER env overrides). */
+    provider: z.enum(['none', 'skinport', 'steam', 'mock']),
+    /** Markup applied to the market price, percent (can be negative). */
+    markupPercent: z.number().min(-90).max(500),
+    minPrice: z.number().min(0.01),
+  }),
   site: z.object({
     maintenance: z.boolean(),
     announcement: z.string().max(280),
@@ -54,6 +61,7 @@ export const settingDefaults: { [K in SettingKey]: SettingValue<K> } = {
   deposit: { minAmount: 1, maxAmount: 5000, presets: [5, 10, 25, 50, 100, 250], currency: 'USD' },
   withdraw: { enabled: true, minAmount: 10, maxAmount: 2000, methods: ['card', 'crypto_usdt'] },
   referral: { inviteeBonusPercent: 5 },
+  pricing: { provider: 'none', markupPercent: 0, minPrice: 0.03 },
   site: { maintenance: false, announcement: '' },
 }
 

@@ -14,7 +14,7 @@ export function Logo({ compact = false }: { compact?: boolean }) {
         <path d="M32 14 L48 32 H38 V50 H26 V32 H16 Z" fill="url(#lg)" />
       </svg>
       {!compact && (
-        <span className="font-display text-[21px] font-bold tracking-wide uppercase italic">
+        <span className="hidden font-display text-[21px] font-bold tracking-wide uppercase italic min-[400px]:inline">
           Grader<span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">UP</span>
         </span>
       )}

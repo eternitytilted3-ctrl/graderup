@@ -36,7 +36,8 @@ export function assertWithdrawalAllowed(user: Pick<SessionUser, 'kycStatus'>, am
 }
 
 /** AML screening hook for deposits/withdrawals. Returns true if the operation must be held for manual review. */
-export async function amlScreen(_op: { userId: string; type: 'deposit' | 'withdraw'; amount: string }): Promise<boolean> {
+export async function amlScreen(op: { userId: string; type: 'deposit' | 'withdraw'; amount: string }): Promise<boolean> {
   // TODO: integrate sanctions / velocity screening. Default: never auto-flag.
+  void op
   return false
 }

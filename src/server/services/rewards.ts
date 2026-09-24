@@ -1,7 +1,7 @@
 import 'server-only'
 import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { D, toMoney } from '@/lib/money'
-import { getDb } from '../db/client'
+import { getDb, type Executor } from '../db/client'
 import { payments, rewardClaims, rewards, users } from '../db/schema'
 import { Errors } from '../http/errors'
 import { applyBalanceChange, lockUser } from './ledger'
@@ -20,8 +20,8 @@ export function rewardWindow(type: 'daily' | 'weekly' | 'referral', cooldownSeco
   return { periodKey: `${type}:${cooldownSeconds}:${idx}`, nextAt }
 }
 
-async function depositTotal(userId: string) {
-  const [r] = await getDb()
+async function depositTotal(userId: string, ex: Executor = getDb()) {
+  const [r] = await ex
     .select({ total: sql<string>`coalesce(sum(${payments.amount}), 0)::text` })
     .from(payments)
     .where(and(eq(payments.userId, userId), eq(payments.status, 'completed')))
@@ -29,8 +29,7 @@ async function depositTotal(userId: string) {
 }
 
 /** Referred users who made a completed deposit and for whom the referrer has not claimed yet. */
-async function pendingReferrals(userId: string, rewardId: string) {
-  const db = getDb()
+async function pendingReferrals(userId: string, rewardId: string, db: Executor = getDb()) {
   const rows = await db
     .selectDistinct({ id: users.id, username: users.username })
     .from(users)
@@ -102,7 +101,7 @@ export async function claimReward(userId: string, rewardIdOrType: string, ip?: s
   const result = await db.transaction(async (tx) => {
     await lockUser(tx, userId)
     if (reward.type === 'referral') {
-      const pending = await pendingReferrals(userId, reward.id)
+      const pending = await pendingReferrals(userId, reward.id, tx)
       if (pending.length === 0) throw Errors.conflict('Нет доступных реферальных наград', 'NOTHING_TO_CLAIM')
       const inserted = await tx
         .insert(rewardClaims)
@@ -122,7 +121,7 @@ export async function claimReward(userId: string, rewardIdOrType: string, ip?: s
       return { amount, balance: r.balanceAfter, nextAt: null as string | null }
     }
 
-    const deposited = await depositTotal(userId)
+    const deposited = await depositTotal(userId, tx)
     if (D(deposited).lt(reward.minDepositTotal)) {
       throw Errors.conflict(`Для получения нужно пополнить баланс минимум на $${reward.minDepositTotal}`, 'REQUIREMENT_NOT_MET')
     }

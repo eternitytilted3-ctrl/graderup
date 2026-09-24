@@ -37,9 +37,9 @@ export function Header() {
 
   return (
     <header className={cn('sticky top-0 z-40 border-b border-border/80 bg-[#0d1118]/90 bg-[url(/assets/topo.svg)] bg-[length:700px_auto] backdrop-blur-xl transition-shadow duration-200', scrolled && 'shadow-[0_8px_24px_-12px_rgba(0,0,0,0.8)]')}>
-      <div className="container-page flex h-16 items-center gap-4">
+      <div className="container-page flex h-16 items-center gap-2 sm:gap-4">
         <Logo />
-        <nav className="hidden flex-1 items-center justify-center md:flex" aria-label="Основная навигация">
+        <nav className="hidden flex-1 items-center justify-center lg:flex" aria-label="Основная навигация">
           {NAV.map((n, i) => {
             const active = pathname === n.href || pathname.startsWith(n.href + '/')
             return (
@@ -57,14 +57,14 @@ export function Header() {
             )
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-2 md:ml-0">
+        <div className="ml-auto flex items-center gap-2 lg:ml-0">
           {user ? (
             <>
               <BalanceWidget />
-              <Link href="/deposit" className="hidden lg:block">
+              <Link href="/deposit" className="hidden xl:block">
                 <Button size="md">{t.actions.deposit}</Button>
               </Link>
-              <div className="hidden md:block">
+              <div className="hidden lg:block">
                 <ProfileDropdown />
               </div>
             </>
@@ -78,13 +78,13 @@ export function Header() {
               </Link>
             </>
           )}
-          <button className="grid size-10 place-items-center rounded-md text-muted hover:bg-white/5 hover:text-text md:hidden" onClick={() => setMenu((m) => !m)} aria-label="Меню" aria-expanded={menu}>
+          <button className="grid size-10 place-items-center rounded-md text-muted hover:bg-white/5 hover:text-text lg:hidden" onClick={() => setMenu((m) => !m)} aria-label="Меню" aria-expanded={menu}>
             {menu ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
         </div>
       </div>
       {menu && (
-        <div className="animate-fade-in border-t border-border bg-bg-2/95 backdrop-blur-xl md:hidden">
+        <div className="animate-fade-in border-t border-border bg-bg-2/95 backdrop-blur-xl lg:hidden">
           <nav className="container-page flex flex-col py-2" aria-label="Мобильное меню">
             {user && (
               <div className="mb-2 flex items-center justify-between rounded-lg border border-border bg-card px-3 py-3">

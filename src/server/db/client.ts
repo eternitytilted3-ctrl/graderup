@@ -10,7 +10,12 @@ export type Executor = DB | Tx
 const globalForDb = globalThis as unknown as { __graderupPool?: Pool; __graderupDb?: DB }
 
 function createPool(url: string) {
-  return new Pool({ connectionString: url, max: Number(process.env.DB_POOL_MAX ?? 10), idleTimeoutMillis: 30_000 })
+  return new Pool({ connectionString: url, max: Number(process.env.DB_POOL_MAX ?? 20),
+    idleTimeoutMillis: 30_000,
+    // Fail fast instead of hanging if the pool is exhausted.
+    connectionTimeoutMillis: 10_000,
+    // Upper bound for row-lock waits inside game/money transactions.
+    options: '-c lock_timeout=10000 -c statement_timeout=30000' })
 }
 
 /** Lazily created singleton (survives Next.js dev hot reloads). */

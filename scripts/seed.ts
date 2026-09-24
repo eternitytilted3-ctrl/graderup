@@ -150,6 +150,7 @@ async function main() {
 
   // ── Items ──
   const itemRows: (typeof items.$inferSelect)[] = []
+  const usedNames = new Set<string>()
   for (const rarity of Object.keys(RANGES) as Rarity[]) {
     const [lo, hi] = RANGES[rarity]
     const perRarity = { common: 14, uncommon: 13, rare: 12, epic: 11, legendary: 8, mythic: 6 }[rarity]
@@ -157,11 +158,14 @@ async function main() {
       const a = POOLS[rarity][i % POOLS[rarity].length]
       const finish = FINISHES[rarity][i % FINISHES[rarity].length]
       const isWeapon = !['sticker', 'charm', 'grenade'].includes(a.art)
-      const wear = isWeapon ? ` (${WEARS[(i + rarity.length) % WEARS.length]})` : ''
+      let wear = isWeapon ? ` (${WEARS[(i + rarity.length) % WEARS.length]})` : ''
+      for (let w = 1; usedNames.has(`${a.name} | ${finish}${wear}`) && w <= WEARS.length; w++) wear = ` (${WEARS[(i + rarity.length + w) % WEARS.length]})`
+      if (usedNames.has(`${a.name} | ${finish}${wear}`)) continue
+      usedNames.add(`${a.name} | ${finish}${wear}`)
       const price = round2(Math.exp(between(Math.log(lo), Math.log(hi))))
       const [row] = await db
         .insert(items)
-        .values({ name: `${a.name} | ${finish}${wear}`, image: `/assets/items/${a.art}.svg`, price: price.toFixed(2), rarity, description: DESCRIPTIONS[a.art] ?? '' })
+        .values({ name: `${a.name} | ${finish}${wear}`, marketHashName: `${a.name} | ${finish}${wear}`, image: `/assets/items/${a.art}.svg`, price: price.toFixed(2), rarity, description: DESCRIPTIONS[a.art] ?? '' })
         .returning()
       if (row) itemRows.push(row)
     }

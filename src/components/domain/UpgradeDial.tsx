@@ -20,7 +20,6 @@ export function UpgradeDial({ chance, state, rollFraction }: { chance: number | 
   useEffect(() => {
     if (state === 'spinning' && rollFraction !== null) {
       turns.current += 5
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAngle(turns.current * 360 + rollFraction * 360)
     }
     if (state === 'idle') {

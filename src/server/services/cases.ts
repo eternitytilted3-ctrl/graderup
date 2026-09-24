@@ -159,7 +159,9 @@ export async function openCase(userId: string, caseIdOrSlug: string, ip?: string
     }
   })
   void logEvent('case_open', { userId, ip, details: { caseId: result.caseId, price: result.price, itemId: result.item.id, openingId: result.openingId } })
-  const { caseId: _c, price: _p, ...out } = result
+  const { caseId, price, ...out } = result
+  void caseId
+  void price
   return out
 }
 

@@ -10,7 +10,7 @@ export function BalanceWidget() {
   if (!user) return null
   return (
     <div className="flex h-10 items-center overflow-hidden rounded-[var(--radius-md)] border border-border bg-bg-2">
-      <div className="flex items-center gap-2 px-3" aria-label="Баланс">
+      <div className="flex items-center gap-2 px-2.5 sm:px-3" aria-label="Баланс">
         <Wallet className="size-4 text-accent" />
         <span className="font-display text-sm font-bold tnum" data-testid="balance">
           {formatMoney(user.balance)}
