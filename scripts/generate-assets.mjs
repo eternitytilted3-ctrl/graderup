@@ -135,6 +135,69 @@ const crateTheme = [
   ['premium', '#d9a13a', '#4f3208', '#fff4d0', 'karambit', true],
 ]
 
+// Knife silhouettes (original drawings) for knife-type cases. Handle on the left, blade to the right.
+const handle = (style = 'plain') => {
+  const base = `<rect x="18" y="62" width="64" height="16" rx="6" fill="url(#d)"/>`
+  const extra = {
+    plain: '',
+    wrap: Array.from({ length: 6 }, (_, i) => `<path d="M${26 + i * 9} 62 l-4 16" stroke="url(#acc)" stroke-width="3"/>`).join(''),
+    holes: `<circle cx="34" cy="70" r="4" fill="#0b0e14"/><circle cx="50" cy="70" r="4" fill="#0b0e14"/><circle cx="66" cy="70" r="4" fill="#0b0e14"/>`,
+    ring: `<circle cx="16" cy="70" r="9" stroke="url(#m)" stroke-width="5" fill="none"/>`,
+    butterfly: `<rect x="18" y="56" width="64" height="9" rx="4" fill="url(#m)"/><rect x="18" y="75" width="64" height="9" rx="4" fill="url(#m)"/>`,
+    tee: `<rect x="60" y="44" width="18" height="52" rx="6" fill="url(#d)"/>`,
+  }[style]
+  return base + extra + `<rect x="78" y="58" width="8" height="24" rx="2" fill="url(#acc)"/>`
+}
+const edge = (d) => `<path d="${d}" stroke="#fff" stroke-opacity=".55" stroke-width="1.6" fill="none"/>`
+const knifeArt = {
+  gut: handle() + `<path d="M86 62 H150 Q168 58 184 66 Q170 70 160 70 Q156 60 146 66 L150 78 H86 Z" fill="url(#m)"/>` + edge('M90 76 H150'),
+  kukri: handle('plain') + `<path d="M86 60 Q120 56 150 70 Q172 82 188 70 Q180 92 150 88 Q118 84 86 80 Z" fill="url(#m)"/>` + edge('M92 78 Q130 82 170 84'),
+  karambit: handle('ring') + `<path d="M86 60 Q140 40 178 64 Q150 58 128 70 Q110 80 86 80 Z" fill="url(#m)"/>` + edge('M92 76 Q116 70 136 62'),
+  butterfly: handle('butterfly') + `<path d="M86 62 H160 L186 70 L160 78 H86 Z" fill="url(#m)"/>` + edge('M90 76 H160'),
+  m9: handle('plain') + `<path d="M86 60 H166 L188 70 L168 80 H86 Z" fill="url(#m)"/>` + `<path d="M100 60 l4 -4 l4 4 l4 -4 l4 4 l4 -4 l4 4 l4 -4 l4 4" stroke="url(#m)" stroke-width="2" fill="none"/>` + edge('M90 76 H164'),
+  bayonet: handle('plain') + `<path d="M86 62 H170 L190 70 L170 78 H86 Z" fill="url(#m)"/>` + `<path d="M84 50 v40" stroke="url(#m)" stroke-width="6"/>` + edge('M90 70 H176'),
+  falchion: handle('plain') + `<path d="M86 60 Q140 52 186 58 Q170 78 140 82 H86 Z" fill="url(#m)"/>` + edge('M90 78 Q140 78 176 64'),
+  huntsman: handle('plain') + `<path d="M86 60 H150 L166 66 L186 64 Q176 78 150 80 H86 Z" fill="url(#m)"/>` + `<path d="M96 60 l3 -3 l3 3 l3 -3 l3 3 l3 -3 l3 3 l3 -3 l3 3" stroke="url(#m)" stroke-width="2" fill="none"/>` + edge('M92 77 H150'),
+  bowie: handle('plain') + `<path d="M86 56 H150 L164 62 L190 60 Q180 84 146 84 H86 Z" fill="url(#m)"/>` + edge('M92 80 H150'),
+  daggers: handle('tee') + `<path d="M78 58 L150 64 L178 70 L150 76 L78 82 Z" fill="url(#m)"/>` + edge('M84 70 H170'),
+  navaja: handle('plain') + `<path d="M86 64 Q140 56 186 50 Q170 72 130 78 H86 Z" fill="url(#m)"/>` + edge('M92 76 Q140 72 176 56'),
+  stiletto: handle('plain') + `<path d="M86 65 H176 L194 70 L176 75 H86 Z" fill="url(#m)"/>` + edge('M90 70 H186'),
+  talon: handle('ring') + `<path d="M86 62 Q146 44 184 56 Q156 60 136 72 Q116 80 86 80 Z" fill="url(#m)"/>` + edge('M92 76 Q120 70 146 60'),
+  ursus: handle('plain') + `<path d="M86 60 H158 L182 74 L158 80 H86 Z" fill="url(#m)"/>` + edge('M90 78 H160'),
+  classic: handle('plain') + `<path d="M86 62 H164 L186 70 L164 78 H86 Z" fill="url(#m)"/>` + edge('M92 70 H176'),
+  paracord: handle('wrap') + `<path d="M86 62 H158 L184 70 L160 78 H86 Z" fill="url(#m)"/>` + edge('M92 76 H158'),
+  survival: handle('wrap') + `<path d="M86 60 H156 L182 70 L156 80 H86 Z" fill="url(#m)"/>` + `<path d="M96 60 l3 -4 l3 4 l3 -4 l3 4 l3 -4 l3 4 l3 -4 l3 4 l3 -4 l3 4" stroke="url(#m)" stroke-width="2" fill="none"/>` + edge('M92 78 H156'),
+  nomad: handle('plain') + `<path d="M86 60 H150 Q176 62 188 70 Q170 80 150 80 H86 Z" fill="url(#m)"/>` + edge('M92 78 H152'),
+  skeleton: handle('holes') + `<path d="M86 60 H156 L184 70 L156 80 H86 Z" fill="url(#m)"/>` + edge('M92 78 H156'),
+  flip: handle('plain') + `<path d="M86 62 H152 Q174 60 188 66 Q172 78 150 78 H86 Z" fill="url(#m)"/>` + `<circle cx="96" cy="70" r="3.5" fill="#0b0e14"/>` + edge('M104 76 H150'),
+}
+Object.assign(items, knifeArt)
+crateTheme.push(
+  ['buckshot', '#a3452a', '#3a1409', '#ffd0a0', 'shotgun', false],
+  ['sidearm', '#46505e', '#141920', '#9fe8ff', 'pistol', false],
+  ['scope', '#255d8a', '#0a2033', '#b8ecff', 'sniper', false],
+  ['hook', '#6f3c2a', '#24110a', '#ffb98a', 'gut', true],
+  ['kukri', '#3e6b2f', '#12240c', '#d8ff9e', 'kukri', true],
+  ['karambit', '#1e1f24', '#050507', '#ff5570', 'karambit', true],
+  ['butterfly', '#6a2bd6', '#1d0a45', '#f3c2ff', 'butterfly', true],
+  ['m9', '#2b4a6f', '#0b1624', '#9fd4ff', 'm9', true],
+  ['bayonet', '#5b6470', '#1b1f25', '#ffe08a', 'bayonet', true],
+  ['falchion', '#8c2f39', '#2a0a0f', '#ffc2c8', 'falchion', true],
+  ['huntsman', '#4f5a2c', '#181c0b', '#f0ff9e', 'huntsman', true],
+  ['bowie', '#7a5b34', '#271a0b', '#ffe3b0', 'bowie', true],
+  ['daggers', '#3b3f48', '#101216', '#b9c6ff', 'daggers', true],
+  ['navaja', '#a05d2a', '#331a08', '#ffd5a8', 'navaja', true],
+  ['stiletto', '#2e2e36', '#0a0a0d', '#e4ae39', 'stiletto', true],
+  ['talon', '#1f6b6b', '#082222', '#9ffff1', 'talon', true],
+  ['ursus', '#5e3d2a', '#1d110a', '#ffcfa3', 'ursus', true],
+  ['classic', '#6a6f78', '#1f2227', '#ffffff', 'classic', true],
+  ['paracord', '#2f5b3a', '#0d1f12', '#ffb547', 'paracord', true],
+  ['survival', '#556b2f', '#1a220d', '#ff8a3d', 'survival', true],
+  ['nomad', '#8a6a3a', '#2c1f0c', '#fff1c4', 'nomad', true],
+  ['skeleton', '#3a3f4a', '#0d0f13', '#e0e6f0', 'skeleton', true],
+  ['flip', '#2f63b5', '#0b1c3a', '#bcd9ff', 'flip', true],
+)
+
 let rs = 1
 const rnd = () => ((rs = (rs * 48271) % 2147483647) / 2147483647)
 
@@ -192,7 +255,7 @@ for (const [slug, main, dark, accent, art, hazard] of crateTheme) {
     <!-- panel with weapon -->
     <rect x="42" y="76" width="136" height="68" rx="4" fill="url(#${id}p)" stroke="${accent}" stroke-opacity=".45" stroke-width="1.2"/>
     <path d="M46 80 h18 M46 80 v10 M174 140 h-18 M174 140 v-10" stroke="${accent}" stroke-opacity=".8" stroke-width="1.6"/>
-    <g transform="translate(47 74) scale(.63)" filter="url(#${id}ws)">${weapon}</g>
+    <g transform="${knifeArt[art] ? 'translate(38 56) scale(.74) rotate(-14 100 70)' : 'translate(47 74) scale(.63)'}" filter="url(#${id}ws)">${weapon}</g>
     ${scratches}
     ${rivets}
     <!-- latches -->

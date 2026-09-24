@@ -12,7 +12,10 @@ if (login) {
   await p.click('button[type=submit]'); await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 20000 })
 }
 for (const path of paths.split(',')) {
-  await p.goto(base + path, { waitUntil: 'networkidle' }); await p.waitForTimeout(600)
+  await p.goto(base + path, { waitUntil: 'networkidle' })
+  // Scroll through the page so lazy images load before the full-page shot.
+  await p.evaluate(async () => { for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 80)) } window.scrollTo(0, 0) })
+  await p.waitForTimeout(600)
   const name = (path.replace(/[\/?=&]/g, '_') || '_home') + `-${w}.png`
   await p.screenshot({ path: `${outdir}/${name}`, fullPage: true })
   const sw = await p.evaluate(() => document.documentElement.scrollWidth)

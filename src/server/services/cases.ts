@@ -60,7 +60,7 @@ export async function listCaseCatalog(): Promise<{ category: CaseCategoryDTO; ca
     listCases(),
     getDb().select().from(caseCategories).where(eq(caseCategories.isActive, true)).orderBy(asc(caseCategories.sortOrder), asc(caseCategories.name)),
   ])
-  const sections = cats.map((c) => ({ category: { id: c.id, name: c.name, slug: c.slug }, cases: all.filter((x) => x.categoryId === c.id) }))
+  const sections = cats.map((c) => ({ category: { id: c.id, name: c.name, slug: c.slug }, cases: all.filter((x) => x.categoryId === c.id).sort((x, y) => Number(x.price) - Number(y.price)) }))
   const known = new Set(cats.map((c) => c.id))
   const rest = all.filter((x) => !x.categoryId || !known.has(x.categoryId))
   if (rest.length) sections.push({ category: { id: 'other', name: 'Другие', slug: 'other' }, cases: rest })

@@ -19,7 +19,7 @@ async function staffLogin(page: Page, login: string, password: string) {
 
 test('cases catalogue: category sections, price chips, no sort dropdown', async ({ page }) => {
   await page.goto('/cases')
-  for (const name of ['Бюджетные', 'Классика', 'Limited']) await expect(page.getByRole('heading', { name })).toBeVisible()
+  for (const name of ['Бюджетные', 'Классика', 'Ножевые кейсы', 'Премиум и Limited']) await expect(page.getByRole('heading', { name })).toBeVisible()
   await expect(page.getByLabel('Сортировка')).toHaveCount(0)
   await page.getByRole('radio', { name: 'До 50 C' }).click()
   await expect(page.getByText('Магнум', { exact: true })).toBeVisible()

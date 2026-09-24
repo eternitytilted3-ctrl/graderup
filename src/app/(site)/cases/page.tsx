@@ -14,7 +14,7 @@ export default async function CasesPage() {
   const sections = await listCaseCatalog()
   return (
     <div className="container-page">
-      <PageHeader eyebrow="Каталог" title="Кейсы" description="Выберите кейс, изучите возможные предметы и их шансы, затем откройте его." />
+      <PageHeader eyebrow="Каталог" title="Кейсы" description="Выберите кейс, посмотрите, какие скины в нём лежат, и откройте его — до 5 штук за раз." />
       <CasesCatalog sections={sections} />
     </div>
   )

@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { getDb } from '@/server/db/client'
-import { caseItems, cases, items, promocodes, rewards, users } from '@/server/db/schema'
+import { caseItems, cases, items, promocodes, rewards, userItems, users } from '@/server/db/schema'
 import { applyBalanceChange } from '@/server/services/ledger'
 
 export async function resetDb() {
@@ -52,4 +52,13 @@ export async function ledgerConsistent(userId: string) {
   const r = await getDb().execute<{ ok: boolean }>(sql`
     select (select balance from users where id = ${userId}) = coalesce((select sum(amount) from transactions where user_id = ${userId}), 0) as ok`)
   return r.rows[0].ok
+}
+
+/** Grants `n` copies of an item directly (deterministic test inventory). */
+export async function grantItems(userId: string, itemId: string, n: number) {
+  const rows = await getDb()
+    .insert(userItems)
+    .values(Array.from({ length: n }, () => ({ userId, itemId, source: 'admin' as const })))
+    .returning({ id: userItems.id })
+  return rows.map((r) => r.id)
 }

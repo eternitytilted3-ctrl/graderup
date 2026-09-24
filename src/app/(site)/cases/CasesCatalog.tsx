@@ -47,7 +47,7 @@ export function CasesCatalog({ sections }: { sections: { category: CaseCategoryD
                 {s.category.name}
                 <span className="h-px flex-1 bg-gradient-to-r from-border-strong to-transparent" aria-hidden />
               </h2>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5" data-testid="case-section">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5" data-testid="case-section">
                 {s.cases.map((c, i) => (
                   <CaseCard key={c.id} c={c} priority={si === 0 && i < 4} />
                 ))}

@@ -6,12 +6,11 @@ import { getSetting } from '../services/settings'
 import { familyExpectedPrice } from '../services/wear'
 
 export const CASE_CATEGORIES = [
-  { slug: 'new', name: 'Новинки', sortOrder: 0 },
   { slug: 'budget', name: 'Бюджетные', sortOrder: 1 },
   { slug: 'classic', name: 'Классика', sortOrder: 2 },
   { slug: 'collections', name: 'Цветная коллекция', sortOrder: 3 },
-  { slug: 'knives', name: 'Ножи и перчатки', sortOrder: 4 },
-  { slug: 'limited', name: 'Limited', sortOrder: 5 },
+  { slug: 'knife-types', name: 'Ножевые кейсы', sortOrder: 4 },
+  { slug: 'limited', name: 'Премиум и Limited', sortOrder: 5 },
 ] as const
 
 type CategorySlug = (typeof CASE_CATEGORIES)[number]['slug']
@@ -25,6 +24,8 @@ export interface CasePreset {
   featured?: boolean
   /** Restrict the rare end of the drop list (e.g. knives-only case). */
   theme?: 'knives' | 'gloves'
+  /** Knife-type case: rare end = only this knife (CS2 market prefix after "★ "), e.g. "Gut Knife". */
+  knife?: string
 }
 
 /** Case line-up (prices in coins). Art: public/assets/cases/<slug>.svg (scripts/generate-assets.mjs). */
@@ -33,16 +34,40 @@ export const CASE_PRESETS: CasePreset[] = [
   { slug: 'exposure', name: 'Экспозиция', price: 39, category: 'budget', description: 'Недорогие скины с шансом на редкость.' },
   { slug: 'sprint', name: 'Спринт', price: 50, category: 'budget', description: 'Быстрые пистолеты и пистолеты-пулемёты.' },
   { slug: 'ricochet', name: 'Рикошет', price: 75, category: 'budget', description: 'Дробовики, SMG и немного везения.' },
-  { slug: 'neo', name: 'Нео', price: 120, category: 'new', description: 'Свежая неоновая сборка.', featured: true },
+  { slug: 'buckshot', name: 'Картечь', price: 99, category: 'budget', description: 'Дробовики и пистолеты-пулемёты.' },
+  { slug: 'sidearm', name: 'Табельный', price: 249, category: 'classic', description: 'Пистолеты на любой вкус.' },
+  { slug: 'scope', name: 'Прицел', price: 399, category: 'collections', description: 'Снайперские винтовки и не только.', featured: true },
+  { slug: 'neo', name: 'Нео', price: 120, category: 'classic', description: 'Свежая неоновая сборка.', featured: true },
   { slug: 'steel', name: 'Сталь', price: 145, category: 'classic', description: 'Надёжная классика для стабильных дропов.' },
   { slug: 'desert', name: 'Пустыня', price: 199, category: 'classic', description: 'Песочные раскраски и винтовки.' },
-  { slug: 'fog', name: 'Туман', price: 300, category: 'new', description: 'Тёмные тактические скины.', featured: true },
+  { slug: 'fog', name: 'Туман', price: 300, category: 'classic', description: 'Тёмные тактические скины.', featured: true },
   { slug: 'green', name: 'Зелёный', price: 499, category: 'collections', description: 'Цветная коллекция: зелёный.' },
   { slug: 'yellow', name: 'Жёлтый', price: 799, category: 'collections', description: 'Цветная коллекция: жёлтый.' },
   { slug: 'blue', name: 'Синий', price: 1299, category: 'collections', description: 'Цветная коллекция: синий.' },
   { slug: 'red', name: 'Красный', price: 1999, category: 'collections', description: 'Цветная коллекция: красный.', featured: true },
-  { slug: 'blade', name: 'Клинок', price: 2999, category: 'knives', description: 'Шанс на нож ★ в каждом открытии.', theme: 'knives', featured: true },
-  { slug: 'gloves', name: 'Перчатки', price: 4999, category: 'knives', description: 'Перчатки ★ и дорогие винтовки.', theme: 'gloves' },
+  { slug: 'blade', name: 'Клинок', price: 2999, category: 'limited', description: 'Шанс на нож ★ в каждом открытии.', theme: 'knives', featured: true },
+  { slug: 'gloves', name: 'Перчатки', price: 4999, category: 'limited', description: 'Перчатки ★ и дорогие винтовки.', theme: 'gloves' },
+  // ── Knife-type cases: every case holds one CS2 knife model (all its finishes) + cheaper skins ──
+  { slug: 'hook', name: 'Крюк', price: 1199, category: 'knife-types', description: 'Ножи с лезвием-крюком (Gut Knife) во всех раскрасках.', knife: 'Gut Knife', featured: true },
+  { slug: 'kukri', name: 'Кукри', price: 2499, category: 'knife-types', description: 'Изогнутый клинок Кукри — новинка CS2.', knife: 'Kukri Knife', featured: true },
+  { slug: 'karambit', name: 'Коготь тигра', price: 4999, category: 'knife-types', description: 'Легендарный Керамбит во всех раскрасках.', knife: 'Karambit', featured: true },
+  { slug: 'butterfly', name: 'Мотылёк', price: 4499, category: 'knife-types', description: 'Нож-бабочка для любителей трюков.', knife: 'Butterfly Knife' },
+  { slug: 'm9', name: 'Штык M9', price: 3999, category: 'knife-types', description: 'Штык-нож M9 — классика дорогих дропов.', knife: 'M9 Bayonet' },
+  { slug: 'bayonet', name: 'Штык', price: 2999, category: 'knife-types', description: 'Штык-нож в любой отделке.', knife: 'Bayonet' },
+  { slug: 'falchion', name: 'Фальшион', price: 1499, category: 'knife-types', description: 'Фальшион с широким изогнутым клинком.', knife: 'Falchion Knife' },
+  { slug: 'huntsman', name: 'Егерь', price: 1799, category: 'knife-types', description: 'Охотничий нож с пилой на обухе.', knife: 'Huntsman Knife' },
+  { slug: 'bowie', name: 'Боуи', price: 1599, category: 'knife-types', description: 'Массивный нож Боуи.', knife: 'Bowie Knife' },
+  { slug: 'daggers', name: 'Тени', price: 999, category: 'knife-types', description: 'Тычковые ножи — самый доступный нож ★.', knife: 'Shadow Daggers' },
+  { slug: 'navaja', name: 'Наваха', price: 899, category: 'knife-types', description: 'Складная наваха по бюджетной цене.', knife: 'Navaja Knife' },
+  { slug: 'stiletto', name: 'Стилет', price: 2799, category: 'knife-types', description: 'Изящный выкидной стилет.', knife: 'Stiletto Knife' },
+  { slug: 'talon', name: 'Талон', price: 3499, category: 'knife-types', description: 'Нож-коготь Talon.', knife: 'Talon Knife' },
+  { slug: 'ursus', name: 'Медведь', price: 1699, category: 'knife-types', description: 'Складной нож Урсус.', knife: 'Ursus Knife' },
+  { slug: 'classic', name: 'Оригинал', price: 2199, category: 'knife-types', description: 'Классический нож из первых версий CS.', knife: 'Classic Knife' },
+  { slug: 'paracord', name: 'Паракорд', price: 1399, category: 'knife-types', description: 'Нож с рукоятью в оплётке паракорда.', knife: 'Paracord Knife' },
+  { slug: 'survival', name: 'Выживший', price: 1299, category: 'knife-types', description: 'Нож для выживания с пилой.', knife: 'Survival Knife' },
+  { slug: 'nomad', name: 'Кочевник', price: 1999, category: 'knife-types', description: 'Nomad — крепкий нож для любых условий.', knife: 'Nomad Knife' },
+  { slug: 'skeleton', name: 'Скелет', price: 3199, category: 'knife-types', description: 'Скелетный нож с облегчённой рукоятью.', knife: 'Skeleton Knife' },
+  { slug: 'flip', name: 'Флип', price: 1899, category: 'knife-types', description: 'Складной Flip Knife.', knife: 'Flip Knife' },
   { slug: 'aurora', name: 'Аврора', price: 7999, category: 'limited', description: 'Лимитированный кейс с Covert-скинами.' },
   { slug: 'monolith', name: 'Монолит', price: 12999, category: 'limited', description: 'Для хайроллеров.' },
   { slug: 'premium', name: 'Премиум', price: 17999, category: 'limited', description: 'Максимальные ставки — максимальные дропы.', featured: true },
@@ -111,14 +136,27 @@ export async function buildCases(opts: { rtp?: number } = {}) {
     const lo = preset.price * 0.1
     const hi = preset.price * 40
     let band = pool.filter((i) => priceOf(i) >= lo && priceOf(i) <= hi)
-    if (preset.theme) {
+    if (preset.knife) {
+      // Knife-type case: several finishes of this knife (spread by price) + cheaper filler skins.
+      const prefix = `★ ${preset.knife} | `
+      const knives = pool.filter((i) => i.name.startsWith(prefix) || i.name === `★ ${preset.knife}`)
+      const pickKnives = knives.filter((_, idx) => idx % Math.max(1, Math.ceil(knives.length / 6)) === 0).slice(0, 6)
+      band = [...band.filter((i) => priceOf(i) < preset.price * 1.3 && !i.name.startsWith('★')), ...pickKnives]
+    } else if (preset.theme) {
       const special = pool.filter((i) => (preset.theme === 'knives' ? isKnife(i.name) : isGloves(i.name)) && priceOf(i) <= hi * 3)
       band = [...band.filter((i) => priceOf(i) < preset.price * 1.5 && !i.name.startsWith('★')), ...special]
     }
     if (band.length < 4) continue
-    const want = Math.min(14, band.length)
     const picked = new Map<string, (typeof band)[number]>()
     const weaponsUsed = new Set<string>()
+    if (preset.knife) {
+      // All chosen knife finishes go in; the pick loop below spreads the filler over the cheaper band.
+      for (const k of band.filter((i) => i.name.startsWith('★'))) picked.set(k.id, k)
+      if (picked.size === 0) continue
+      band = band.filter((i) => !i.name.startsWith('★'))
+      if (band.length < 3) continue
+    }
+    const want = Math.min(preset.knife ? 14 - picked.size : 14, band.length)
     const bandLo = Math.max(lo, priceOf(band[0]))
     const bandHi = Math.max(...band.map((b) => priceOf(b)))
     for (let k = 0; k < want; k++) {

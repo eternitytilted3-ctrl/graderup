@@ -11,7 +11,7 @@ import { createPayment, handleWebhook } from '@/server/services/payments'
 import { redeemPromocode } from '@/server/services/promocodes'
 import { claimReward } from '@/server/services/rewards'
 import { performUpgrade } from '@/server/services/upgrade'
-import { balanceOf, createCatalog, createUser, ledgerConsistent, resetDb } from './helpers'
+import { balanceOf, createCatalog, createUser, grantItems, ledgerConsistent, resetDb } from './helpers'
 
 let cat: Awaited<ReturnType<typeof createCatalog>>
 
@@ -82,10 +82,10 @@ describe('multi-open (×N)', () => {
 
 describe('multi-source upgrade', () => {
   it('uses the sum of up to 5 items; all sources are consumed', async () => {
-    const u = await createUser('10.00')
-    const { results } = await openCases(u.id, cat.case.id, 5)
-    const ids = results.map((r) => r.userItemId)
+    const u = await createUser()
+    const ids = await grantItems(u.id, cat.cheap.id, 5) // 5 × 1.00 = 5.00 → target 50.00 (×10)
     const r = await performUpgrade(u.id, ids, cat.pricey.id)
+    expect(r.sourceValue).toBe('5.00')
     expect(r.sources).toHaveLength(5)
     const [{ n }] = await getDb().select({ n: count() }).from(userItems).where(and(eq(userItems.userId, u.id), eq(userItems.status, 'used')))
     expect(n).toBe(5)
@@ -104,9 +104,8 @@ describe('multi-source upgrade', () => {
   })
 
   it('overlapping parallel upgrades: each item is consumed at most once', async () => {
-    const u = await createUser('8.00')
-    const { results } = await openCases(u.id, cat.case.id, 4)
-    const [a, b, c, d] = results.map((r) => r.userItemId)
+    const u = await createUser()
+    const [a, b, c, d] = await grantItems(u.id, cat.cheap.id, 4)
     const rs = await settle([performUpgrade(u.id, [a, b], cat.pricey.id), performUpgrade(u.id, [b, c], cat.pricey.id), performUpgrade(u.id, [c, d], cat.pricey.id)])
     expect(ok(rs)).toBe(2) // {a,b} and {c,d} succeed, {b,c} conflicts
     expect(await ledgerConsistent(u.id)).toBe(true)
