@@ -11,7 +11,7 @@ export async function requireUser(next: string) {
 
 export async function requireAdmin() {
   const auth = await getCurrentAuth()
-  if (!auth) redirect('/login?next=/admin')
+  if (!auth) redirect('/cmsadmin')
   if (auth.user.role === 'user') redirect('/')
   return auth
 }

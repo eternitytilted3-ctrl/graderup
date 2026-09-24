@@ -10,6 +10,7 @@ export interface ItemDTO {
   description?: string
 }
 
+/** Case content entry. When odds are hidden, `price` and `chance` are empty strings. */
 export interface CaseItemDTO extends ItemDTO {
   chance: string
 }
@@ -30,7 +31,7 @@ export interface CaseDTO {
 
 export interface InventoryItemDTO {
   id: string
-  status: 'available' | 'locked' | 'sold' | 'used'
+  status: 'available' | 'locked' | 'sold' | 'used' | 'withdrawn'
   source: string
   createdAt: string
   item: ItemDTO

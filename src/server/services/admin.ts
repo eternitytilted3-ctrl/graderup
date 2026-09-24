@@ -23,10 +23,12 @@ import {
   type UserRole,
 } from '../db/schema'
 import { Errors } from '../http/errors'
+import { weightsFor } from '../catalog/cases'
 import { applyBalanceChange } from './ledger'
+import { familyExpectedPrice, loadFamilies } from './wear'
 import { logAdmin } from './log'
 import { paginate, toItemDTO, toPublicUser } from './mappers'
-import { setSetting, type SettingKey } from './settings'
+import { getSetting, setSetting, type SettingKey } from './settings'
 
 const like = (s: string) => `%${s.replace(/[%_\\]/g, '\\$&')}%`
 
@@ -330,10 +332,32 @@ export async function caseForEdit(caseId: string) {
     .innerJoin(items, eq(items.id, caseItems.itemId))
     .where(eq(caseItems.caseId, caseId))
     .orderBy(desc(items.price))
+  const [dropCfg, casesCfg] = await Promise.all([getSetting('drops'), getSetting('cases')])
+  const familyOf = await loadFamilies(db, entries.map((e) => e.item))
   return {
     case: { ...c, createdAt: c.createdAt.toISOString(), updatedAt: c.updatedAt.toISOString() },
-    items: entries.map((e) => ({ item: { ...toItemDTO(e.item), isActive: e.item.isActive }, dropWeight: e.ci.dropWeight, dropChance: e.ci.dropChance })),
+    targetRtp: casesCfg.rtp,
+    items: entries.map((e) => ({
+      item: { ...toItemDTO(e.item), isActive: e.item.isActive },
+      // Expected value after the exterior roll — this is what drives EV/RTP.
+      expectedPrice: familyExpectedPrice(familyOf(e.item), dropCfg.wearWeights).toFixed(2),
+      dropWeight: e.ci.dropWeight,
+      dropChance: e.ci.dropChance,
+    })),
   }
+}
+
+/** Recomputes the weights of a case's current items so that EV ≈ price × rtp (items are kept). */
+export async function rebalanceCase(adminId: string, caseId: string, rtp: number, ip?: string) {
+  const data = await caseForEdit(caseId)
+  if (data.items.length < 2) throw Errors.badRequest('В кейсе должно быть минимум 2 предмета')
+  const price = Number(data.case.price)
+  const prices = data.items.map((i) => Number(i.expectedPrice))
+  if (!prices.some((p) => p < price * rtp) || !prices.some((p) => p > price * rtp)) {
+    throw Errors.badRequest('Недостижимый RTP: нужны предметы и дешевле, и дороже целевого EV')
+  }
+  const weights = weightsFor(prices, price, rtp)
+  return setCaseItems(adminId, caseId, data.items.map((i, k) => ({ itemId: i.item.id, dropWeight: weights[k] })), ip)
 }
 
 export async function saveCase(adminId: string, id: string | null, input: CaseInput, ip?: string) {

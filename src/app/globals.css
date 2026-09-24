@@ -203,3 +203,64 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* "Окуп" — drop worth more than the case: bounce-in, light sweep and a pulsing glow. */
+@keyframes profit-in {
+  0% {
+    transform: scale(0.6) rotate(-6deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(1.12) rotate(2deg);
+    opacity: 1;
+  }
+  75% {
+    transform: scale(0.97) rotate(-1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes profit-sweep {
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  100% {
+    transform: translateX(220%) skewX(-20deg);
+  }
+}
+@keyframes profit-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--r), 0 0 24px -4px var(--r);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--r), 0 0 46px 2px var(--r);
+  }
+}
+.profit-card {
+  animation:
+    profit-in 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.3) both,
+    profit-glow 1.6s ease-in-out 0.7s infinite;
+}
+.profit-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+  animation: profit-sweep 1.1s ease-out 0.35s 2 both;
+  pointer-events: none;
+}
+.profit-card img {
+  animation: profit-float 2.4s ease-in-out 0.7s infinite;
+}
+@keyframes profit-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-3deg);
+  }
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Coins, Info, TrendingUp } from 'lucide-react'
+import { ArrowUpFromLine, Check, Coins, Info, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { formatDate } from '@/lib/format'
 import { formatMoney } from '@/lib/money'
@@ -16,6 +16,7 @@ export function InventoryCard({
   onToggle,
   onSell,
   onDetails,
+  onWithdraw,
   busy,
 }: {
   entry: InventoryItemDTO
@@ -25,6 +26,7 @@ export function InventoryCard({
   onToggle: () => void
   onSell: () => void
   onDetails: () => void
+  onWithdraw?: () => void
   busy?: boolean
 }) {
   return (
@@ -41,7 +43,7 @@ export function InventoryCard({
         <>
           <div className="text-[10px] text-subtle">{formatDate(entry.createdAt, false)}</div>
           {!selectMode && (
-            <div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-1.5">
+            <div className="mt-2 grid grid-cols-[1fr_auto_auto_auto] gap-1.5">
               <button
                 onClick={onSell}
                 disabled={busy}
@@ -55,6 +57,13 @@ export function InventoryCard({
                   <TrendingUp className="size-3.5" />
                 </Link>
               </Tooltip>
+              {onWithdraw && (
+                <Tooltip content="Вывести в Steam">
+                  <button onClick={onWithdraw} className="grid size-8 place-items-center rounded-md bg-white/[0.05] text-muted transition hover:bg-accent/20 hover:text-accent" aria-label="Вывести в Steam" data-testid="withdraw-skin">
+                    <ArrowUpFromLine className="size-3.5" />
+                  </button>
+                </Tooltip>
+              )}
               <Tooltip content="Подробнее">
                 <button onClick={onDetails} className="grid size-8 place-items-center rounded-md bg-white/[0.05] text-muted transition hover:bg-white/10 hover:text-text" aria-label="Подробнее">
                   <Info className="size-3.5" />

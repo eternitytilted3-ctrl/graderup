@@ -21,6 +21,28 @@ const schema = z.object({
   REAL_PAYMENT_API_KEY: z.string().optional(),
   REAL_PAYMENT_MERCHANT_ID: z.string().optional(),
   /** Steam OpenID needs no key, so it is on unless explicitly disabled. */
+  PALLY_API_TOKEN: z.string().optional(),
+  PALLY_SHOP_ID: z.string().optional(),
+  PALLY_API_URL: z.string().url().default('https://pal24.pro/api/v1'),
+  ANYPAY_MERCHANT_ID: z.string().optional(),
+  ANYPAY_SECRET_KEY: z.string().optional(),
+  ANYPAY_ALLOWED_IPS: z
+    .string()
+    .optional()
+    .transform((v) =>
+      (v ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  XROCKET_API_KEY: z.string().optional(),
+  XROCKET_API_URL: z.string().url().default('https://pay.xrocket.tg'),
+  XROCKET_CURRENCY: z.string().default('USDT'),
+  /** How many coins (₽) one unit of XROCKET_CURRENCY is worth, e.g. 95 for USDT. */
+  XROCKET_COINS_PER_UNIT: z.coerce.number().positive().default(95),
+  /** Skin withdrawal to Steam: 'mock' (dev simulation) | 'none'. Real adapters: see src/server/trades. */
+  TRADE_PROVIDER: z.enum(['none', 'mock']).default('mock'),
+  ALLOW_MOCK_TRADES_IN_PRODUCTION: bool,
   STEAM_AUTH_ENABLED: z
     .string()
     .optional()

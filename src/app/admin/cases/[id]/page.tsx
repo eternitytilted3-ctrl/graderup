@@ -21,10 +21,13 @@ import { useFetch } from '@/lib/useFetch'
 
 interface EditData {
   case: CaseRecord
-  items: { item: ItemDTO & { isActive: boolean }; dropWeight: number; dropChance: string }[]
+  targetRtp: number
+  items: { item: ItemDTO & { isActive: boolean }; expectedPrice: string; dropWeight: number; dropChance: string }[]
 }
 interface Row {
   item: ItemDTO
+  /** EV of the skin after the exterior roll (server-computed); falls back to price for new rows. */
+  expectedPrice?: string
   /** Editable chance in percent; converted to integer weights (×1000) on save. */
   chance: string
 }
@@ -40,17 +43,33 @@ export default function CaseEditor({ params }: { params: Promise<{ id: string }>
   const [saving, setSaving] = useState(false)
   const [confirmSave, setConfirmSave] = useState(false)
   const [preview, setPreview] = useState(false)
+  const [rtpInput, setRtpInput] = useState('68')
+  const [rebalancing, setRebalancing] = useState(false)
+
+  async function rebalance() {
+    setRebalancing(true)
+    try {
+      await api(`/api/admin/cases/${id}/rebalance`, { body: { rtp: Number(rtpInput) / 100 } })
+      toast.success(`Веса подогнаны под RTP ${rtpInput}%`)
+      reload()
+    } catch (e) {
+      toast.error('Не удалось', (e as ApiError).message)
+    } finally {
+      setRebalancing(false)
+    }
+  }
   const catalog = useFetch<Paginated<ItemDTO>>(adding ? `/api/admin/items${qs({ q, pageSize: 30 })}` : null)
 
   useEffect(() => {
     if (!data) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRows(data.items.map((e) => ({ item: e.item, chance: Number(e.dropChance).toFixed(3) })))
+    setRows(data.items.map((e) => ({ item: e.item, expectedPrice: e.expectedPrice, chance: Number(e.dropChance).toFixed(3) })))
+    setRtpInput(String(Math.round(data.targetRtp * 100)))
     setDirty(false)
   }, [data])
 
   const total = useMemo(() => rows.reduce((s, r) => s + (Number(r.chance) || 0), 0), [rows])
-  const ev = useMemo(() => rows.reduce((s, r) => s + (Number(r.chance) / 100) * Number(r.item.price), 0), [rows])
+  const ev = useMemo(() => rows.reduce((s, r) => s + (Number(r.chance) / 100) * Number(r.expectedPrice ?? r.item.price), 0), [rows])
   const price = Number(data?.case.price ?? 0)
   const rtp = price ? (ev / price) * 100 : 0
   const totalOk = Math.abs(total - 100) < 0.001
@@ -120,6 +139,12 @@ export default function CaseEditor({ params }: { params: Promise<{ id: string }>
             <div>
               RTP: <span className={`font-semibold tnum ${rtp > 100 ? 'text-danger' : ''}`}>{rtp.toFixed(1)}%</span>
             </div>
+            <div className="flex items-center gap-1.5">
+              <input className="input h-8 w-16 tnum" inputMode="numeric" value={rtpInput} onChange={(e) => setRtpInput(e.target.value.replace(/[^\d]/g, ''))} aria-label="Целевой RTP, %" />
+              <Button size="sm" variant="secondary" onClick={rebalance} loading={rebalancing} disabled={dirty || !(Number(rtpInput) >= 30 && Number(rtpInput) <= 99)} title={dirty ? 'Сначала сохраните состав' : undefined}>
+                Подогнать под RTP %
+              </Button>
+            </div>
             <div className="ml-auto flex gap-2">
               <Button size="sm" variant="secondary" onClick={normalize} disabled={totalOk}>
                 Нормализовать до 100%
@@ -165,7 +190,10 @@ export default function CaseEditor({ params }: { params: Promise<{ id: string }>
                     <td className="px-3 py-2">
                       <RarityBadge rarity={r.item.rarity} />
                     </td>
-                    <td className="px-3 py-2 tnum">{formatMoney(r.item.price)}</td>
+                    <td className="px-3 py-2 tnum">
+                      {formatMoney(r.item.price)}
+                      {r.expectedPrice && r.expectedPrice !== r.item.price && <div className="text-[11px] text-subtle">EV с качеством: {formatMoney(r.expectedPrice)}</div>}
+                    </td>
                     <td className="px-3 py-2">
                       <input className={`input h-8 w-28 tnum ${Number(r.chance) > 0 ? '' : 'border-danger'}`} inputMode="decimal" value={r.chance} onChange={(e) => update(i, e.target.value.replace(',', '.'))} aria-label={`Шанс ${r.item.name}`} />
                     </td>

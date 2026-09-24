@@ -10,6 +10,8 @@ export const MOCK_SIGNATURE_HEADER = 'x-mock-signature'
  */
 export class MockPaymentProvider implements PaymentProvider {
   readonly id = 'mock'
+  readonly title = 'Тестовая оплата'
+  readonly hint = 'Только для разработки'
   constructor(
     private readonly secret: string,
     private readonly appUrl: string,

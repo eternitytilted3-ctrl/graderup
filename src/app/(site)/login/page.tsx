@@ -13,7 +13,7 @@ export default async function Page() {
   return (
     <div className="container-page">
       <Suspense>
-        <SteamSignIn steamEnabled={p.steam} emailRegistration={p.emailRegistration} />
+        <SteamSignIn steamEnabled={p.steam} />
       </Suspense>
     </div>
   )

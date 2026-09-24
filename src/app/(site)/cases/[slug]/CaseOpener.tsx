@@ -3,9 +3,10 @@
 import { Coins, PackageCheck, RotateCcw, Zap } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Roulette, type RouletteHandle } from '@/components/domain/Roulette'
-import { RarityBadge } from '@/components/domain/RarityBadge'
+import { WinCelebration } from '@/components/domain/WinCelebration'
+import { RarityBadge, rarityColor } from '@/components/domain/RarityBadge'
 import { useSession } from '@/components/SessionProvider'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -41,6 +42,8 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
   const [result, setResult] = useState<OpenCasesResult | null>(null)
   const [sold, setSold] = useState<Set<string>>(new Set())
   const [selling, setSelling] = useState(false)
+  const [celebrate, setCelebrate] = useState<{ x: number; y: number; color: string } | null>(null)
+  const onCelebrated = useCallback(() => setCelebrate(null), [])
   const idle = useMemo(() => COUNTS.map((_, i) => shuffled(items, i)), [items])
 
   const total = D(price).mul(count)
@@ -60,6 +63,12 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
       // 2. Animations only visualize the returned results.
       await Promise.all(r.results.map((drop, i) => handles.current[i]?.spin(drop.reel, drop.winIndex, { fast })))
       setResult(r)
+      // "Окуп": at least one drop is worth more than the case → celebrate.
+      const best = [...r.results].sort((a, b) => Number(b.item.price) - Number(a.item.price))[0]
+      if (best && D(best.item.price).gt(price)) {
+        sfx.success()
+        setCelebrate({ x: window.innerWidth / 2, y: window.innerHeight / 2, color: rarityColor[best.item.rarity] })
+      }
     } catch (err) {
       const e = err as ApiError
       toast.error(e.code === 'INSUFFICIENT_FUNDS' ? 'Недостаточно средств' : 'Не удалось открыть кейс', e.message)
@@ -166,7 +175,20 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
           <div className="flex flex-col items-center text-center">
             <div className={cn('grid w-full gap-3', remaining.length === 1 ? 'grid-cols-1' : remaining.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3')}>
               {remaining.map((d) => (
-                <div key={d.userItemId} data-rarity={d.item.rarity} className="slot-bg relative flex flex-col items-center overflow-hidden rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--r)_50%,transparent)] p-3">
+                <div
+                  key={d.userItemId}
+                  data-rarity={d.item.rarity}
+                  data-profit={D(d.item.price).gt(price) || undefined}
+                  className={cn(
+                    'slot-bg relative flex flex-col items-center overflow-hidden rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--r)_50%,transparent)] p-3',
+                    D(d.item.price).gt(price) && 'profit-card',
+                  )}
+                >
+                  {D(d.item.price).gt(price) && (
+                    <span className="absolute top-2 left-2 z-10 rounded bg-success px-1.5 py-0.5 font-display text-[11px] font-bold tracking-wide text-[#05140c] uppercase" data-testid="profit-badge">
+                      Окуп ×{D(d.item.price).div(price).toDecimalPlaces(1).toString()}
+                    </span>
+                  )}
                   <div className="relative flex h-28 w-full items-center justify-center">
                     <div className="absolute inset-0 animate-pop rounded-full" style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--r) 45%, transparent), transparent)' }} />
                     <Image src={d.item.image} alt={d.item.name} width={200} height={140} className="relative h-24 w-auto animate-pop object-contain" />
@@ -205,6 +227,7 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
           </div>
         )}
       </Modal>
+      {celebrate && <WinCelebration origin={celebrate} color={celebrate.color} onDone={onCelebrated} />}
     </section>
   )
 }

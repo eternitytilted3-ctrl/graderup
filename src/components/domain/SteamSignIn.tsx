@@ -1,11 +1,8 @@
 'use client'
 
-import { ChevronDown, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useState } from 'react'
-import { cn } from '@/lib/cn'
-import { AuthForm } from './AuthForm'
 
 /** Generic "sign in with Steam" glyph (original drawing, not the Steam trademark logo). */
 function SteamGlyph({ className }: { className?: string }) {
@@ -23,9 +20,8 @@ function safeNext(next: string | null) {
   return next && next.startsWith('/') && !next.startsWith('//') ? next : null
 }
 
-export function SteamSignIn({ steamEnabled, emailRegistration }: { steamEnabled: boolean; emailRegistration: boolean }) {
+export function SteamSignIn({ steamEnabled }: { steamEnabled: boolean }) {
   const params = useSearchParams()
-  const [showEmail, setShowEmail] = useState(false)
   const qs = new URLSearchParams()
   const ref = params.get('ref')
   const next = safeNext(params.get('next'))
@@ -73,16 +69,8 @@ export function SteamSignIn({ steamEnabled, emailRegistration }: { steamEnabled:
               .
             </span>
           </p>
-          <button onClick={() => setShowEmail((v) => !v)} className="mt-6 flex w-full items-center justify-center gap-1.5 text-xs text-subtle transition hover:text-muted" aria-expanded={showEmail}>
-            Вход по email (для администраторов) <ChevronDown className={cn('size-3.5 transition', showEmail && 'rotate-180')} />
-          </button>
         </div>
       </div>
-      {showEmail && (
-        <div className="-mt-6">
-          <AuthForm mode="login" steamEnabled={false} embedded showRegisterLink={emailRegistration} />
-        </div>
-      )}
     </div>
   )
 }

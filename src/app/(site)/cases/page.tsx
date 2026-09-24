@@ -6,7 +6,7 @@ import { listCaseCatalog } from '@/server/services/cases'
 export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Кейсы',
-  description: 'Каталог кейсов GraderUP: бюджетные, классика, коллекции, ножи и перчатки, limited — прозрачные шансы.',
+  description: 'Каталог кейсов GraderUP: бюджетные, классика, коллекции, ножи и перчатки, limited — скины CS2 на любой бюджет.',
   alternates: { canonical: '/cases' },
 }
 

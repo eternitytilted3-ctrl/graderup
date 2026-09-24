@@ -36,6 +36,21 @@ export default function AdminWithdrawals() {
   const [page, setPage] = useState(1)
   const [act, setAct] = useState<{ row: Row; action: 'approve' | 'reject' } | null>(null)
   const [busy, setBusy] = useState(false)
+  const cfg = useFetch<{ enabled: boolean; minAmount: number; maxAmount: number; perDay: number }>('/api/admin/withdrawals/toggle')
+  const [toggling, setToggling] = useState(false)
+  async function toggle() {
+    if (!cfg.data) return
+    setToggling(true)
+    try {
+      await api('/api/admin/withdrawals/toggle', { body: { enabled: !cfg.data.enabled } })
+      toast.success(cfg.data.enabled ? 'Вывод закрыт' : 'Вывод открыт')
+      cfg.reload()
+    } catch (e) {
+      toast.error('Ошибка', (e as ApiError).message)
+    } finally {
+      setToggling(false)
+    }
+  }
   const { data, error, reload } = useFetch<Paginated<Row>>(`/api/admin/withdrawals${qs({ page, pageSize: 25, status: status === 'all' ? undefined : status })}`)
 
   async function run() {
@@ -56,7 +71,23 @@ export default function AdminWithdrawals() {
 
   return (
     <>
-      <AdminTitle title="Выводы" description="Выплата выполняется вне системы; «Одобрить» фиксирует выплату, «Отклонить» возвращает средства (refund)." />
+      <AdminTitle
+        title="Выводы"
+        description="Выплата выполняется вне системы; «Одобрить» фиксирует выплату, «Отклонить» возвращает средства (refund)."
+        actions={
+          cfg.data && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted">
+                Лимит: до {cfg.data.maxAmount} C, {cfg.data.perDay}/сутки
+              </span>
+              <Button variant={cfg.data.enabled ? 'danger' : 'success'} onClick={toggle} loading={toggling} data-testid="withdraw-toggle">
+                {cfg.data.enabled ? 'Закрыть вывод' : 'Открыть вывод'}
+              </Button>
+              <Badge tone={cfg.data.enabled ? 'success' : 'danger'}>{cfg.data.enabled ? 'Вывод открыт' : 'Вывод закрыт'}</Badge>
+            </div>
+          )
+        }
+      />
       <div className="mb-4">
         <Filter ariaLabel="Статус" value={status} onChange={(v) => { setStatus(v); setPage(1) }} options={[{ value: 'all', label: 'Все' }, ...Object.entries(t.withdrawalStatus).map(([value, label]) => ({ value, label }))]} />
       </div>

@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: PageProps<'/cases/[slug]'>): 
     const { case: c } = await getCase(slug)
     return {
       title: `Кейс ${c.name}`,
-      description: `${c.description} Цена ${formatMoney(c.price)}, ${c.itemCount} предметов с прозрачными шансами.`,
+      description: `${c.description} Цена ${formatMoney(c.price)}, ${c.itemCount} скинов CS2.`,
       alternates: { canonical: `/cases/${c.slug}` },
       openGraph: { title: `Кейс ${c.name} — GraderUP`, description: c.description, images: [{ url: c.image }] },
     }
@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: PageProps<'/cases/[slug]'>): 
 
 export default async function CasePage({ params }: PageProps<'/cases/[slug]'>) {
   const { slug } = await params
-  const { case: c, items } = await load(slug)
+  const { case: c, items, showOdds } = await load(slug)
   return (
     <div className="container-page">
       <Link href="/cases" className="mt-6 inline-flex items-center gap-1 text-sm text-muted transition hover:text-text">
@@ -64,7 +64,7 @@ export default async function CasePage({ params }: PageProps<'/cases/[slug]'>) {
 
       <section className="pt-12">
         <h2 className="h-tactical mb-5 text-2xl">Возможные предметы</h2>
-        <CaseItemsGrid items={items} />
+        <CaseItemsGrid items={items} showOdds={showOdds} />
       </section>
     </div>
   )

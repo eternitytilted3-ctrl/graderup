@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { InventoryCard } from '@/components/domain/InventoryCard'
+import { SkinWithdrawModal } from '@/components/domain/SkinWithdrawModal'
 import { PageHeader } from '@/components/domain/PageHeader'
 import { RarityBadge, rarityColor } from '@/components/domain/RarityBadge'
 import { useSession } from '@/components/SessionProvider'
@@ -45,8 +46,9 @@ export function InventoryView() {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [details, setDetails] = useState<Entry | null>(null)
-  const [confirm, setConfirm] = useState<{ ids: string[]; amount: string } | null>(null)
+  const [confirm, setConfirm] = useState<{ ids: string[] | 'all'; amount: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [withdrawing, setWithdrawing] = useState<Entry | null>(null)
 
   const url = `/api/inventory${qs({ page, pageSize: 24, sort, rarity: rarity === 'all' ? undefined : rarity, search })}`
   const { data, error, loading, reload } = useFetch<Resp>(url)
@@ -68,7 +70,9 @@ export function InventoryView() {
     setBusy(true)
     try {
       const r =
-        confirm.ids.length === 1
+        confirm.ids === 'all'
+          ? await api<{ balance: string; amount: string; soldCount: number }>('/api/inventory/sell-all', { method: 'POST' })
+          : confirm.ids.length === 1
           ? await api<{ balance: string; amount: string; soldCount: number }>(`/api/inventory/${confirm.ids[0]}/sell`, { method: 'POST' })
           : await api<{ balance: string; amount: string; soldCount: number }>('/api/inventory/sell', { body: { ids: confirm.ids } })
       setBalance(r.balance)
@@ -102,9 +106,14 @@ export function InventoryView() {
               </Button>
             </>
           ) : (
-            <Button variant="secondary" onClick={() => setSelectMode(true)} disabled={!data?.items.length}>
-              <CheckSquare className="size-4" /> Выбрать
-            </Button>
+            <>
+              <Button variant="secondary" onClick={() => setSelectMode(true)} disabled={!data?.items.length}>
+                <CheckSquare className="size-4" /> Выбрать
+              </Button>
+              <Button variant="success" onClick={() => data && setConfirm({ ids: 'all', amount: D(data.totalValue).mul(data.sellRatio).toFixed(2) })} disabled={!data?.total} data-testid="sell-all-inventory">
+                <Coins className="size-4" /> Продать всё
+              </Button>
+            </>
           )
         }
       />
@@ -160,6 +169,7 @@ export function InventoryView() {
                   onToggle={() => toggle(e.id)}
                   onSell={() => setConfirm({ ids: [e.id], amount: e.sellPrice })}
                   onDetails={() => setDetails(e)}
+                  onWithdraw={() => setWithdrawing(e)}
                   busy={busy}
                 />
               ))}
@@ -174,13 +184,27 @@ export function InventoryView() {
       <ConfirmModal
         open={Boolean(confirm)}
         title="Продать предметы?"
-        confirmLabel={`Продать за ${formatMoney(confirm?.amount ?? 0)}`}
+        confirmLabel={confirm?.ids === 'all' ? `Продать всё ≈ ${formatMoney(confirm.amount)}` : `Продать за ${formatMoney(confirm?.amount ?? 0)}`}
         loading={busy}
         onClose={() => setConfirm(null)}
         onConfirm={doSell}
       >
-        {confirm?.ids.length === 1 ? 'Предмет будет продан, сумма сразу поступит на баланс.' : `Будет продано предметов: ${confirm?.ids.length}.`} Операция необратима.
+        {confirm?.ids === 'all'
+          ? `Будут проданы все доступные предметы инвентаря (${data?.total ?? 0} шт.).`
+          : confirm?.ids.length === 1
+            ? 'Предмет будет продан, сумма сразу поступит на баланс.'
+            : `Будет продано предметов: ${confirm?.ids.length}.`}{' '}
+        Операция необратима.
       </ConfirmModal>
+
+      <SkinWithdrawModal
+        entry={withdrawing}
+        onClose={() => setWithdrawing(null)}
+        onDone={() => {
+          setWithdrawing(null)
+          reload()
+        }}
+      />
 
       <Modal open={Boolean(details)} onClose={() => setDetails(null)} title="Информация о предмете" size="sm">
         {details && (

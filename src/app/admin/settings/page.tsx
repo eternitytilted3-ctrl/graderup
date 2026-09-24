@@ -16,7 +16,10 @@ const DESCRIPTIONS: Record<string, string> = {
   withdraw: 'Лимиты вывода и доступные способы. Также требуется FEATURE_WITHDRAW=true.',
   referral: 'Бонус приглашённому на первый депозит, %.',
   pricing: 'Провайдер рыночных цен (none | skinport | steam | mock), наценка % и минимальная цена. PRICE_PROVIDER в ENV имеет приоритет.',
-  site: 'Технические флаги.',
+  site: 'Технические флаги. showOnline — показывать реальный онлайн в ленте.',
+  cases: 'rtp — целевой возврат для «Подогнать под RTP» и пересборки кейсов (0.68 = 68%). showOdds — показывать игрокам шансы/цены/качество содержимого кейсов.',
+  drops: 'Веса качества, которое выпадает после выбора скина (нормируются по существующим вариантам).',
+  skinWithdraw: 'Вывод скинов в Steam: enabled — открыт/закрыт, maxActive — одновременных выводов на игрока.',
 }
 
 function SettingEditor({ k, value, canEdit, onSaved }: { k: string; value: unknown; canEdit: boolean; onSaved: () => void }) {

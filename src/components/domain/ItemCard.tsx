@@ -18,6 +18,7 @@ export function ItemCard({
   size = 'md',
   className,
   dimmed,
+  hidePrice,
 }: {
   item: ItemDTO
   chance?: string
@@ -28,6 +29,8 @@ export function ItemCard({
   size?: 'sm' | 'md'
   className?: string
   dimmed?: boolean
+  /** Hide the price line (case contents when odds are hidden). */
+  hidePrice?: boolean
 }) {
   const Comp = onClick ? 'button' : 'div'
   const [weapon, finish] = item.name.split(' | ')
@@ -72,7 +75,7 @@ export function ItemCard({
           </div>
           {finish && <div className="truncate text-[11px] text-muted">{finish}</div>}
         </div>
-        <div className={cn('mt-auto pt-1 font-display font-bold text-text tnum', size === 'sm' ? 'text-xs' : 'text-sm')}>{formatMoney(item.price)}</div>
+        {!hidePrice && <div className={cn('mt-auto pt-1 font-display font-bold text-text tnum', size === 'sm' ? 'text-xs' : 'text-sm')}>{formatMoney(item.price)}</div>}
         {footer}
       </div>
       <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: 'var(--r)', boxShadow: '0 -2px 10px color-mix(in srgb, var(--r) 60%, transparent)' }} />

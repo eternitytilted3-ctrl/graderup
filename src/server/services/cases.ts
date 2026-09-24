@@ -8,6 +8,7 @@ import { caseCategories, caseItems, caseOpenings, cases, items, userItems, users
 import { Errors } from '../http/errors'
 import { secureRandomInt } from '../security/crypto'
 import { applyBalanceChange, lockUser } from './ledger'
+import { loadFamilies, rollWear } from './wear'
 import { logEvent } from './log'
 import { toItemDTO } from './mappers'
 import { getSetting } from './settings'
@@ -89,18 +90,21 @@ export async function getCase(idOrSlug: string, opts: { includeDisabled?: boolea
   const db = getDb()
   const [c] = await db.select().from(cases).where(caseWhere(idOrSlug))
   if (!c || (c.status !== 'active' && !opts.includeDisabled)) throw Errors.notFound('Кейс не найден')
-  const entries = await loadCaseEntries(c.id)
+  const [entries, casesCfg] = await Promise.all([loadCaseEntries(c.id), getSetting('cases')])
   const totalWeight = entries.reduce((s, e) => s + e.ci.dropWeight, 0)
-  const itemsOut: CaseItemDTO[] = entries.map((e) => ({
-    ...toItemDTO(e.item),
-    // Chance shown to users is computed from the SAME weights the RNG uses.
-    chance: totalWeight > 0 ? D(e.ci.dropWeight).div(totalWeight).mul(100).toDecimalPlaces(4).toString() : '0',
-  }))
+  const itemsOut: CaseItemDTO[] = entries.map((e) => {
+    const base = toItemDTO(e.item)
+    if (!casesCfg.showOdds) {
+      // Odds, prices and exterior are hidden: players see the skin, the exterior is rolled on drop.
+      return { id: base.id, name: e.item.baseName ?? base.name, image: base.image, rarity: base.rarity, price: '', chance: '' }
+    }
+    return { ...base, chance: totalWeight > 0 ? D(e.ci.dropWeight).div(totalWeight).mul(100).toDecimalPlaces(4).toString() : '0' }
+  })
   const topRarity = itemsOut.reduce<Rarity | undefined>(
     (best, i) => (!best || RARITIES.indexOf(i.rarity) > RARITIES.indexOf(best) ? i.rarity : best),
     undefined,
   )
-  return { case: toCaseDTO(c, { itemCount: itemsOut.length, topRarity }), items: itemsOut }
+  return { case: toCaseDTO(c, { itemCount: itemsOut.length, topRarity }), items: itemsOut, showOdds: casesCfg.showOdds }
 }
 
 /** Decorative reel around the (already determined) winning item. Visualization only. */
@@ -124,7 +128,7 @@ export const MAX_OPEN_COUNT = 5
 export async function openCases(userId: string, caseIdOrSlug: string, count = 1, ip?: string): Promise<OpenCasesResult> {
   if (!Number.isInteger(count) || count < 1 || count > MAX_OPEN_COUNT) throw Errors.badRequest(`Можно открыть от 1 до ${MAX_OPEN_COUNT} кейсов`)
   const db = getDb()
-  const sellRatio = (await getSetting('inventory')).sellRatio
+  const [{ sellRatio }, dropCfg] = await Promise.all([getSetting('inventory'), getSetting('drops')])
   const out = await db.transaction(async (tx) => {
     const user = await lockUser(tx, userId)
     const [c] = await tx.select().from(cases).where(caseWhere(caseIdOrSlug))
@@ -141,12 +145,15 @@ export async function openCases(userId: string, caseIdOrSlug: string, count = 1,
     if (entries.length === 0) throw Errors.conflict('Кейс временно недоступен', 'CASE_EMPTY')
     const weighted = entries.map((e) => ({ ...e, dropWeight: e.ci.dropWeight }))
     const totalWeight = entries.reduce((s, e) => s + e.ci.dropWeight, 0)
+    const familyOf = await loadFamilies(tx, entries.map((e) => e.item))
 
     const drops: OpenCaseDrop[] = []
     let balance = user.balance
     for (let n = 0; n < count; n++) {
+      // 1) which skin (case weights), 2) which exterior (wear weights) — both server-side.
       const roll = secureRandomInt(totalWeight)
-      const won = pickByWeight(weighted, roll)
+      const skin = pickByWeight(weighted, roll)
+      const won = { item: rollWear(familyOf(skin.item), dropCfg.wearWeights).item }
       const openingId = randomUUID()
       const userItemId = randomUUID()
       const r = await applyBalanceChange(tx, {

@@ -198,7 +198,7 @@ async function main() {
   // ── Demo activity through the real services (keeps the ledger consistent) ──
   const deposit = async (userId: string, amount: number) => {
     if (mockAllowed()) {
-      const p = await createPayment(userId, amount)
+      const p = await createPayment(userId, amount, 'mock')
       const mock = getMockProvider()
       const hook = mock.buildWebhook({ externalId: `mock_${p.id}`, paymentId: p.id, status: 'completed', amount: p.amount, currency: p.currency })
       await handleWebhook('mock', hook.body, new Headers({ 'x-mock-signature': hook.signature }))

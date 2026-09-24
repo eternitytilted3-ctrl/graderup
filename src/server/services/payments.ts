@@ -6,7 +6,7 @@ import { amlScreen } from '../compliance/kyc'
 import { getDb } from '../db/client'
 import { payments, users } from '../db/schema'
 import { Errors } from '../http/errors'
-import { getPaymentProvider } from '../payments'
+import { enabledPaymentProviders, findPaymentProvider, getPaymentProvider } from '../payments'
 import { WebhookSignatureError } from '../payments/PaymentProvider'
 import { applyBalanceChange } from './ledger'
 import { logEvent } from './log'
@@ -26,13 +26,14 @@ function toPaymentDTO(p: typeof payments.$inferSelect) {
   }
 }
 
-export async function createPayment(userId: string, amountInput: number, ip?: string) {
+export async function createPayment(userId: string, amountInput: number, method?: string, ip?: string) {
   const cfg = await getSetting('deposit')
   const amount = toMoney(amountInput)
   if (D(amount).lt(cfg.minAmount) || D(amount).gt(cfg.maxAmount)) {
     throw Errors.badRequest(`Сумма пополнения должна быть от ${cfg.minAmount} до ${cfg.maxAmount} C`)
   }
-  const provider = getPaymentProvider()
+  const provider = findPaymentProvider(method)
+  if (!provider) throw Errors.badRequest('Способ оплаты недоступен')
   const db = getDb()
   const [p] = await db.insert(payments).values({ userId, provider: provider.id, amount, currency: cfg.currency }).returning()
   try {
@@ -78,7 +79,7 @@ export async function handleWebhook(providerId: string, rawBody: string, headers
   const provider = getPaymentProvider(providerId)
   let event
   try {
-    event = await provider.verifyWebhook(rawBody, headers)
+    event = await provider.verifyWebhook(rawBody, headers, ip)
   } catch (err) {
     void logEvent('webhook_invalid_signature', { level: 'security', ip, details: { provider: providerId, error: err instanceof WebhookSignatureError ? 'signature' : 'parse' } })
     throw Errors.forbidden('Invalid signature')
@@ -86,10 +87,15 @@ export async function handleWebhook(providerId: string, rawBody: string, headers
 
   const db = getDb()
   const outcome = await db.transaction(async (tx) => {
+    const byPaymentId = event.paymentId && /^[0-9a-f-]{36}$/i.test(event.paymentId)
     const [p] = await tx
       .select()
       .from(payments)
-      .where(and(eq(payments.provider, provider.id), eq(payments.externalId, event.externalId)))
+      .where(
+        byPaymentId
+          ? and(eq(payments.provider, provider.id), eq(payments.id, event.paymentId!))
+          : and(eq(payments.provider, provider.id), eq(payments.externalId, event.externalId)),
+      )
       .for('update')
     if (!p) throw Errors.notFound('Payment not found')
     if (p.status !== 'pending') return { status: p.status, credited: false, paymentId: p.id, userId: p.userId }
@@ -152,5 +158,10 @@ export async function handleWebhook(providerId: string, rawBody: string, headers
     return { status: event.status, credited: false, paymentId: p.id, userId: p.userId }
   })
   void logEvent('deposit_webhook', { userId: outcome.userId, ip, details: { paymentId: outcome.paymentId, status: outcome.status, credited: outcome.credited } })
-  return { received: true, status: outcome.status }
+  return { received: true, status: outcome.status, ack: provider.webhookAck }
+}
+
+/** Payment methods available to players (deposit page). */
+export function paymentMethods() {
+  return enabledPaymentProviders().map((p) => ({ id: p.id, title: p.title, hint: p.hint ?? null }))
 }

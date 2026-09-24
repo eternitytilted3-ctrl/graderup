@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/States'
 import { t } from '@/i18n/ru'
 import { RARITIES, type CaseItemDTO, type Rarity } from '@/lib/types'
 
-export function CaseItemsGrid({ items }: { items: CaseItemDTO[] }) {
+export function CaseItemsGrid({ items, showOdds }: { items: CaseItemDTO[]; showOdds: boolean }) {
   const [rarity, setRarity] = useState<Rarity | 'all'>('all')
   const present = useMemo(() => RARITIES.filter((r) => items.some((i) => i.rarity === r)), [items])
   const list = rarity === 'all' ? items : items.filter((i) => i.rarity === rarity)
@@ -20,13 +20,13 @@ export function CaseItemsGrid({ items }: { items: CaseItemDTO[] }) {
           ariaLabel="Фильтр по редкости"
           value={rarity}
           onChange={setRarity}
-          options={[{ value: 'all', label: 'Все' }, ...present.map((r) => ({ value: r, label: `${t.rarity[r]} · ${totalChance(r).toFixed(2)}%`, color: rarityColor[r] }))]}
+          options={[{ value: 'all', label: 'Все' }, ...present.map((r) => ({ value: r, label: showOdds ? `${t.rarity[r]} · ${totalChance(r).toFixed(2)}%` : t.rarity[r], color: rarityColor[r] }))]}
         />
       </div>
       {list.length ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {list.map((i) => (
-            <ItemCard key={i.id} item={i} chance={i.chance} />
+            <ItemCard key={i.id} item={i} chance={showOdds ? i.chance : undefined} hidePrice={!showOdds} />
           ))}
         </div>
       ) : (

@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, BarChart3, Box, Layers, FileText, Gift, Menu, Package, Receipt, Settings, Shield, Ticket, Users, Wallet, CreditCard, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpFromLine, BarChart3, Box, Layers, FileText, Gift, Menu, Package, Receipt, Settings, Shield, Ticket, Users, Wallet, CreditCard, X } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -17,6 +17,7 @@ const NAV = [
   { href: '/admin/promocodes', label: 'Промокоды', icon: Ticket },
   { href: '/admin/payments', label: 'Платежи', icon: CreditCard },
   { href: '/admin/withdrawals', label: 'Выводы', icon: Wallet },
+  { href: '/admin/skin-withdrawals', label: 'Вывод скинов', icon: ArrowUpFromLine },
   { href: '/admin/transactions', label: 'Транзакции', icon: Receipt },
   { href: '/admin/logs', label: 'Логи', icon: FileText },
   { href: '/admin/settings', label: 'Настройки', icon: Settings },

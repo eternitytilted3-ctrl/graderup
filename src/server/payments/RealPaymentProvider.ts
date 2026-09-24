@@ -11,6 +11,7 @@ import { WebhookSignatureError, type CheckoutSession, type CreateCheckoutInput, 
  */
 export class RealPaymentProvider implements PaymentProvider {
   readonly id = 'real'
+  readonly title = 'Банковская карта'
   constructor(
     private readonly cfg: { apiUrl?: string; apiKey?: string; merchantId?: string; webhookSecret: string },
   ) {}

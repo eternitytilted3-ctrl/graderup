@@ -1,8 +1,17 @@
 import { expect, test } from '@playwright/test'
 
-async function emailLogin(page: import('@playwright/test').Page, login: string, password: string) {
-  await page.goto('/login')
-  await page.getByRole('button', { name: /Вход по email/ }).click()
+type Page = import('@playwright/test').Page
+
+/** Demo players have email passwords (seed only); the public UI signs in via Steam, so tests use the API. */
+async function apiLogin(page: Page, login: string, password: string) {
+  const base = process.env.E2E_BASE_URL ?? 'http://localhost:3000'
+  const r = await page.request.post('/api/auth/login', { data: { login, password }, headers: { origin: base } })
+  expect(r.ok(), await r.text()).toBeTruthy()
+  await page.goto('/')
+}
+
+async function staffLogin(page: Page, login: string, password: string) {
+  await page.goto('/cmsadmin')
   await page.fill('input[name=login]', login)
   await page.fill('input[name=password]', password)
   await page.click('button[type=submit]')
@@ -40,7 +49,7 @@ test('auth page: Steam is the primary sign-in, public email sign-up is disabled'
 
 test.describe.serial('user journey', () => {
   test('login → deposit → open case → sell → upgrade → rewards → history → logout', async ({ page }) => {
-    await emailLogin(page, 'pixel_hunter', 'Demo12345!')
+    await apiLogin(page, 'pixel_hunter', 'Demo12345!')
     await expect(page.getByTestId('balance')).toBeVisible()
     const readBalance = async () => Number((await page.getByTestId('balance').innerText()).replace(/[^\d.]/g, ''))
     const start = await readBalance()
@@ -70,6 +79,14 @@ test.describe.serial('user journey', () => {
 
     await page.goto('/inventory')
     await expect(page.getByText(/\d+ предметов/)).toBeVisible()
+
+    // Withdraw one skin to Steam (mock trade provider in dev): searching → accept → withdrawn.
+    await page.getByTestId('withdraw-skin').first().click()
+    await page.getByTestId('trade-url').fill('https://steamcommunity.com/tradeoffer/new/?partner=123456&token=AbCdEf12')
+    await page.getByTestId('confirm-skin-withdraw').click()
+    await expect(page.getByText(/Вывод создан/)).toBeVisible()
+    await page.goto('/withdraw?tab=skins')
+    await expect(page.getByTestId('skin-withdrawals').getByText('Ищем продавца').first()).toBeVisible()
 
     // Upgrade: pick first inventory item, quick "×2" picks a target server-side, dial spins.
     await page.goto('/upgrade')
@@ -106,15 +123,26 @@ test.describe.serial('user journey', () => {
     await expect(page).toHaveURL(/\/login\?next=%2Finventory/)
   })
 
-  test('wrong password is rejected with a clear message', async ({ page }) => {
-    await emailLogin(page, 'pixel_hunter', 'wrong-password1')
+  test('staff login: non-admin accounts and wrong passwords are rejected', async ({ page }) => {
+    await staffLogin(page, 'pixel_hunter', 'Demo12345!')
     await expect(page.getByText('Неверный логин или пароль')).toBeVisible()
+    await staffLogin(page, 'admin@graderup.local', 'wrong-password1')
+    await expect(page.getByText('Неверный логин или пароль')).toBeVisible()
+  })
+
+  test('sell all inventory', async ({ page }) => {
+    await apiLogin(page, 'nightowl', 'Demo12345!')
+    await page.goto('/inventory')
+    await page.getByTestId('sell-all-inventory').click()
+    await page.getByRole('button', { name: /Продать всё ≈/ }).click()
+    await expect(page.getByText(/Продано предметов/)).toBeVisible()
+    await expect(page.getByText('Инвентарь пуст')).toBeVisible()
   })
 })
 
 test('admin: case editor warns on invalid probability, balance adjust is audited', async ({ page }) => {
-  await emailLogin(page, 'admin@graderup.local', 'Admin12345!')
-  await page.waitForURL((u) => !u.pathname.startsWith('/login'))
+  await staffLogin(page, 'admin@graderup.local', 'Admin12345!')
+  await page.waitForURL(/\/admin/)
 
   await page.goto('/admin/cases')
   await page.getByText('Магнум', { exact: true }).click()

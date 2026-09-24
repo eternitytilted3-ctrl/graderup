@@ -26,7 +26,7 @@ const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull(
 export const userRole = pgEnum('user_role', ['user', 'admin', 'superadmin'])
 export const rarity = pgEnum('rarity', ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'])
 export const caseStatus = pgEnum('case_status', ['active', 'disabled'])
-export const userItemStatus = pgEnum('user_item_status', ['available', 'locked', 'sold', 'used'])
+export const userItemStatus = pgEnum('user_item_status', ['available', 'locked', 'sold', 'used', 'withdrawn'])
 export const userItemSource = pgEnum('user_item_source', ['case', 'upgrade', 'reward', 'promocode', 'admin'])
 export const transactionType = pgEnum('transaction_type', [
   'deposit',
@@ -42,6 +42,7 @@ export const transactionStatus = pgEnum('transaction_status', ['pending', 'compl
 export const upgradeResult = pgEnum('upgrade_result', ['win', 'loss'])
 export const paymentStatus = pgEnum('payment_status', ['pending', 'completed', 'failed', 'cancelled', 'expired'])
 export const withdrawalStatus = pgEnum('withdrawal_status', ['pending', 'approved', 'rejected', 'completed'])
+export const itemWithdrawalStatus = pgEnum('item_withdrawal_status', ['searching', 'waiting_accept', 'completed', 'failed', 'cancelled'])
 export const rewardType = pgEnum('reward_type', ['daily', 'weekly', 'referral'])
 export const promocodeType = pgEnum('promocode_type', ['fixed', 'percentage', 'item'])
 export const logLevel = pgEnum('log_level', ['info', 'warn', 'error', 'security'])
@@ -64,6 +65,8 @@ export const users = pgTable(
     /** Pending % bonus (from percentage promocode) applied to the next deposit. */
     depositBonusPercent: numeric('deposit_bonus_percent', { precision: 5, scale: 2 }).notNull().default('0'),
     kycStatus: varchar('kyc_status', { length: 16 }).notNull().default('none'),
+    /** Steam trade offer URL for skin withdrawals. */
+    steamTradeUrl: varchar('steam_trade_url', { length: 256 }),
     birthDate: timestamp('birth_date', { withTimezone: false, mode: 'string' }),
     failedLoginCount: integer('failed_login_count').notNull().default(0),
     lockedUntil: timestamp('locked_until', { withTimezone: true }),
@@ -139,11 +142,16 @@ export const items = pgTable(
     priceUpdatedAt: timestamp('price_updated_at', { withTimezone: true }),
     /** When true, price sync never overwrites the manually set price. */
     priceLocked: boolean('price_locked').notNull().default(false),
+    /** Skin name without exterior, e.g. "Glock-18 | Pink DDPAT" — groups wear variants of one skin. */
+    baseName: varchar('base_name', { length: 200 }),
+    /** Exterior: Factory New / Minimal Wear / Field-Tested / Well-Worn / Battle-Scarred (null = none). */
+    wear: varchar('wear', { length: 32 }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     uniqueIndex('items_market_hash_name_uq').on(t.marketHashName),
+    index('items_base_name_idx').on(t.baseName),
     index('items_rarity_idx').on(t.rarity),
     index('items_price_idx').on(t.price),
     check('items_price_positive', sql`${t.price} > 0`),
@@ -384,6 +392,39 @@ export const withdrawals = pgTable(
     index('withdrawals_user_idx').on(t.userId, t.createdAt),
     index('withdrawals_status_idx').on(t.status, t.createdAt),
     check('withdrawals_amount_positive', sql`${t.amount} > 0`),
+  ],
+)
+
+/** Skin withdrawals to Steam (delivered by a trade provider: marketplace bot / P2P). */
+export const itemWithdrawals = pgTable(
+  'item_withdrawals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    userItemId: uuid('user_item_id')
+      .notNull()
+      .references(() => userItems.id, { onDelete: 'restrict' }),
+    itemId: uuid('item_id')
+      .notNull()
+      .references(() => items.id, { onDelete: 'restrict' }),
+    price: money('price').notNull(),
+    tradeUrl: varchar('trade_url', { length: 256 }).notNull(),
+    provider: varchar('provider', { length: 32 }).notNull(),
+    externalId: varchar('external_id', { length: 128 }),
+    tradeOfferId: varchar('trade_offer_id', { length: 64 }),
+    status: itemWithdrawalStatus('status').notNull().default('searching'),
+    statusMessage: text('status_message'),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    // An item can have at most one active/completed withdrawal; failed/cancelled ones free it again.
+    index('item_withdrawals_user_idx').on(t.userId, t.createdAt),
+    index('item_withdrawals_status_idx').on(t.status, t.createdAt),
+    uniqueIndex('item_withdrawals_active_item_uq').on(t.userItemId).where(sql`status in ('searching','waiting_accept','completed')`),
   ],
 )
 

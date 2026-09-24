@@ -3,6 +3,7 @@ import { count, desc, eq, sql } from 'drizzle-orm'
 import { getDb } from '../db/client'
 import { caseOpenings, cases, items, sessions, upgrades, users } from '../db/schema'
 import { toItemDTO } from './mappers'
+import { skinWithdrawStats } from './skinWithdrawals'
 
 let publicCache: { at: number; data: Awaited<ReturnType<typeof loadPublicStats>> } | null = null
 
@@ -13,7 +14,8 @@ async function loadPublicStats() {
     db.select({ n: count() }).from(caseOpenings),
     db.select({ n: count() }).from(upgrades),
   ])
-  return { users: u.n, casesOpened: o.n, upgrades: up.n }
+  const skins = await skinWithdrawStats()
+  return { users: u.n, casesOpened: o.n, upgrades: up.n, skinsWithdrawn: skins.count }
 }
 
 /** Cached for 30s: counters for the home page. */

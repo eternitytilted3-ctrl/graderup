@@ -22,6 +22,20 @@
       "when": 1790258592592,
       "tag": "0002_categories_multi",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790259574673,
+      "tag": "0003_item_wear",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790260063286,
+      "tag": "0004_item_withdrawals",
+      "breakpoints": true
     }
   ]
 }

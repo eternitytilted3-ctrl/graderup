@@ -28,9 +28,14 @@ export interface WebhookEvent {
 
 export interface PaymentProvider {
   readonly id: string
+  /** Shown on the deposit page. */
+  readonly title: string
+  readonly hint?: string
   createCheckout(input: CreateCheckoutInput): Promise<CheckoutSession>
   /** Verifies the signature of a raw webhook body and parses it. Throws on invalid signature. */
-  verifyWebhook(rawBody: string, headers: Headers): Promise<WebhookEvent>
+  verifyWebhook(rawBody: string, headers: Headers, ip?: string): Promise<WebhookEvent>
+  /** Body the provider expects on a successfully processed webhook (default: JSON). */
+  webhookAck?: string
 }
 
 export class WebhookSignatureError extends Error {

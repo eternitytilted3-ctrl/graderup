@@ -1,5 +1,5 @@
 import 'server-only'
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import { env } from '@/config/env'
 import { D, toMoney } from '@/lib/money'
 import { amlScreen, assertWithdrawalAllowed } from '../compliance/kyc'
@@ -8,7 +8,7 @@ import { withdrawals } from '../db/schema'
 import { Errors } from '../http/errors'
 import { applyBalanceChange, lockUser } from './ledger'
 import { logAdmin, logEvent } from './log'
-import { getSetting } from './settings'
+import { getSetting, setSetting } from './settings'
 
 export async function withdrawConfig() {
   const cfg = await getSetting('withdraw')
@@ -26,6 +26,16 @@ export async function requestWithdrawal(userId: string, input: { amount: number;
   const out = await getDb().transaction(async (tx) => {
     const user = await lockUser(tx, userId)
     assertWithdrawalAllowed(user, amount)
+    // Limits are checked under the user lock, so parallel requests cannot bypass them.
+    const [{ pending, recent }] = await tx
+      .select({
+        pending: sql<number>`count(*) filter (where ${withdrawals.status} = 'pending')::int`,
+        recent: sql<number>`count(*) filter (where ${withdrawals.status} <> 'rejected' and ${withdrawals.createdAt} > now() - interval '24 hours')::int`,
+      })
+      .from(withdrawals)
+      .where(eq(withdrawals.userId, userId))
+    if (pending > 0) throw Errors.conflict('У вас уже есть заявка на рассмотрении', 'WITHDRAW_PENDING')
+    if (recent >= cfg.perDay) throw Errors.conflict(`Лимит: ${cfg.perDay} вывод(а) в сутки`, 'WITHDRAW_DAILY_LIMIT')
     const [w] = await tx.insert(withdrawals).values({ userId, amount, method: input.method, destination: input.destination }).returning()
     const r = await applyBalanceChange(tx, {
       userId,
@@ -78,5 +88,15 @@ export async function processWithdrawal(adminId: string, withdrawalId: string, a
       .where(eq(withdrawals.id, w.id))
     await logAdmin(tx, { adminId, action: `withdrawal_${action}`, targetType: 'withdrawal', targetId: w.id, details: { amount: w.amount, userId: w.userId, note }, ip })
     return { id: w.id, status }
+  })
+}
+
+/** Admin: open/close withdrawals for everyone (audited). */
+export async function setWithdrawEnabled(adminId: string, enabled: boolean, ip?: string) {
+  const cfg = await getSetting('withdraw')
+  return getDb().transaction(async (tx) => {
+    const saved = await setSetting(tx, 'withdraw', { ...cfg, enabled }, adminId)
+    await logAdmin(tx, { adminId, action: enabled ? 'withdraw_open' : 'withdraw_close', targetType: 'setting', targetId: 'withdraw', ip })
+    return saved
   })
 }

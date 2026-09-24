@@ -44,7 +44,7 @@ export default async function HomePage() {
             <span className="bg-gradient-to-r from-[#a491ff] via-primary to-accent bg-clip-text text-transparent">Улучшай предметы.</span>
           </h1>
           <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-muted sm:text-base">
-            GraderUP — платформа для коллекционеров виртуальных предметов: прозрачные шансы, мгновенный инвентарь и апгрейд до более редких вещей.
+            GraderUP — платформа для коллекционеров скинов CS2: честный серверный RNG, мгновенный инвентарь и апгрейд до более редких вещей.
           </p>
           <div className="mt-7 flex flex-wrap gap-3">
             <Link href="/cases">
@@ -58,11 +58,12 @@ export default async function HomePage() {
               </Button>
             </Link>
           </div>
-          <dl className="mt-9 grid max-w-md grid-cols-3 gap-4">
+          <dl className="mt-9 grid max-w-lg grid-cols-2 gap-4 sm:grid-cols-4">
             {[
               ['Игроков', stats.users],
               ['Кейсов открыто', stats.casesOpened],
               ['Апгрейдов', stats.upgrades],
+              ['Выведено в Steam', stats.skinsWithdrawn],
             ].map(([k, v]) => (
               <div key={k as string}>
                 <dt className="text-xs text-muted">{k}</dt>
@@ -113,7 +114,7 @@ export default async function HomePage() {
               <div className="label mb-2 text-accent/80">Upgrade</div>
               <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Превратите предмет в более ценный</h2>
               <p className="mt-3 max-w-md text-sm leading-relaxed text-muted sm:text-[15px]">
-                Выберите предмет из инвентаря и цель дороже. Шанс рассчитывается сервером по прозрачной формуле и показывается до подтверждения.
+                Выберите предмет из инвентаря и цель дороже. Шанс рассчитывается сервером и показывается до подтверждения.
               </p>
               <Link href="/upgrade" className="mt-6 inline-block">
                 <Button variant="outline">
@@ -143,7 +144,7 @@ export default async function HomePage() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { icon: Lock, title: 'Серверные результаты', text: 'Исход кейса и апгрейда определяется только на сервере — клиент лишь показывает анимацию.' },
-            { icon: Gauge, title: 'Прозрачные шансы', text: 'Шанс каждого предмета виден до открытия и считается из тех же весов, что и результат.' },
+            { icon: Gauge, title: 'Честный RNG', text: 'Скин и его качество определяются криптографически стойким генератором на сервере — изменить результат нельзя.' },
             { icon: Zap, title: 'Мгновенный инвентарь', text: 'Предметы появляются сразу. Продажа за один клик с зачислением на баланс.' },
             { icon: BadgeCheck, title: 'Аудит операций', text: 'Каждое изменение баланса фиксируется в журнале транзакций с балансом до и после.' },
           ].map((f) => (

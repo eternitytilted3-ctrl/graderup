@@ -1,0 +1,11 @@
+import { z } from 'zod'
+import { uuidParam } from '@/server/http/adminSchemas'
+import { route } from '@/server/http/handler'
+import { RateLimits } from '@/server/security/rateLimit'
+import { rebalanceCase } from '@/server/services/admin'
+
+const body = z.object({ rtp: z.number().min(0.3).max(0.99) })
+
+export const POST = route({ auth: 'admin', body, rateLimit: RateLimits.admin }, async ({ auth, params, body, ip }) =>
+  rebalanceCase(auth.user.id, uuidParam.parse(params.id), body.rtp, ip),
+)

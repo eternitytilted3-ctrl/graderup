@@ -34,6 +34,29 @@ export const settingSchemas = {
     minAmount: z.number().positive(),
     maxAmount: z.number().positive(),
     methods: z.array(z.string().min(1).max(32)).min(1).max(8),
+    /** Max withdrawal requests per user per rolling 24h (pending ones included). */
+    perDay: z.number().int().min(1).max(100).default(1),
+  }),
+  skinWithdraw: z.object({
+    enabled: z.boolean(),
+    /** Max simultaneous active skin withdrawals per user. */
+    maxActive: z.number().int().min(1).max(20),
+  }),
+  cases: z.object({
+    /** Target return-to-player used when (re)balancing case weights: 0.5..0.99. */
+    rtp: z.number().min(0.3).max(0.99),
+    /** Show drop chances / prices / exterior of case contents to players. */
+    showOdds: z.boolean(),
+  }),
+  drops: z.object({
+    /** Relative weights of exteriors rolled after the skin is chosen (renormalised over the wears that exist). */
+    wearWeights: z.object({
+      'Factory New': z.number().min(0),
+      'Minimal Wear': z.number().min(0),
+      'Field-Tested': z.number().min(0),
+      'Well-Worn': z.number().min(0),
+      'Battle-Scarred': z.number().min(0),
+    }),
   }),
   referral: z.object({
     /** Bonus the invited user receives on first deposit, percent. */
@@ -49,6 +72,8 @@ export const settingSchemas = {
   site: z.object({
     maintenance: z.boolean(),
     announcement: z.string().max(280),
+    /** Show the (real) online counter in the live-drop rail. */
+    showOnline: z.boolean().default(true),
   }),
 }
 
@@ -60,10 +85,13 @@ export const settingDefaults: { [K in SettingKey]: SettingValue<K> } = {
   inventory: { sellRatio: 0.95 },
   // Money is stored in coins (C). Deposits are charged in RUB, 1 C = 1 RUB.
   deposit: { minAmount: 100, maxAmount: 500000, presets: [300, 500, 1000, 2500, 5000, 10000], currency: 'RUB' },
-  withdraw: { enabled: true, minAmount: 1000, maxAmount: 200000, methods: ['card', 'crypto_usdt'] },
+  withdraw: { enabled: true, minAmount: 100, maxAmount: 500, methods: ['card', 'crypto_usdt'], perDay: 1 },
+  skinWithdraw: { enabled: true, maxActive: 3 },
+  cases: { rtp: 0.68, showOdds: false },
+  drops: { wearWeights: { 'Factory New': 0.25, 'Minimal Wear': 22, 'Field-Tested': 42, 'Well-Worn': 6, 'Battle-Scarred': 29.75 } },
   referral: { inviteeBonusPercent: 5 },
   pricing: { provider: 'none', markupPercent: 0, minPrice: 3 },
-  site: { maintenance: false, announcement: '' },
+  site: { maintenance: false, announcement: '', showOnline: true },
 }
 
 const cache = new Map<string, { value: unknown; at: number }>()

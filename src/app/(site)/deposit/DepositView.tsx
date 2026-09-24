@@ -23,13 +23,43 @@ interface Payment {
   createdAt: string
 }
 
-export function DepositView({ config, payments, bonusPercent, mock }: { config: { minAmount: number; maxAmount: number; presets: number[]; currency: string }; payments: Payment[]; bonusPercent: string; mock: boolean }) {
+interface Method {
+  id: string
+  title: string
+  hint: string | null
+}
+
+export function DepositView({ config, payments, bonusPercent, methods }: { config: { minAmount: number; maxAmount: number; presets: number[]; currency: string }; payments: Payment[]; bonusPercent: string; methods: Method[] }) {
   const router = useRouter()
   const params = useSearchParams()
   const toast = useToast()
   const { refresh } = useSession()
   const [amount, setAmount] = useState(String(config.presets[1] ?? config.minAmount))
   const [loading, setLoading] = useState(false)
+  const [method, setMethod] = useState(methods[0]?.id ?? '')
+  const [promo, setPromo] = useState('')
+  const [promoLoading, setPromoLoading] = useState(false)
+  const [bonus, setBonus] = useState(bonusPercent)
+
+  async function applyPromo() {
+    if (!promo.trim()) return
+    setPromoLoading(true)
+    try {
+      const r = await api<{ type: string; amount?: string; percent?: string; balance?: string; item?: { name: string } }>('/api/rewards/promo', { body: { code: promo.trim() } })
+      if (r.type === 'percentage' && r.percent) {
+        setBonus(r.percent)
+        toast.success('Промокод активирован', `+${Number(r.percent)}% к этому пополнению`)
+      } else {
+        await refresh()
+        toast.success('Промокод активирован', r.type === 'fixed' ? `+${formatMoney(r.amount!)} на баланс` : `${r.item?.name} в инвентаре`)
+      }
+      setPromo('')
+    } catch (err) {
+      toast.error('Промокод не принят', (err as ApiError).message)
+    } finally {
+      setPromoLoading(false)
+    }
+  }
 
   // Returning from the provider: poll the payment status (the webhook is the source of truth).
   useEffect(() => {
@@ -64,7 +94,7 @@ export function DepositView({ config, payments, bonusPercent, mock }: { config: 
   async function submit() {
     setLoading(true)
     try {
-      const p = await api<Payment>('/api/payments/create', { body: { amount: Math.round(num * 100) / 100 } })
+      const p = await api<Payment>('/api/payments/create', { body: { amount: Math.round(num * 100) / 100, method } })
       if (p.checkoutUrl) window.location.href = p.checkoutUrl
     } catch (err) {
       toast.error('Не удалось создать платёж', (err as ApiError).message)
@@ -96,18 +126,49 @@ export function DepositView({ config, payments, bonusPercent, mock }: { config: 
               От {formatMoney(config.minAmount)} до {formatMoney(config.maxAmount)}
             </span>
           </label>
-          {Number(bonusPercent) > 0 && (
+          <div className="mt-5">
+            <div className="label mb-2">Способ оплаты</div>
+            {methods.length === 0 ? (
+              <div className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">Способы оплаты не настроены.</div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Способ оплаты">
+                {methods.map((m) => (
+                  <button
+                    key={m.id}
+                    role="radio"
+                    aria-checked={method === m.id}
+                    onClick={() => setMethod(m.id)}
+                    data-testid={`method-${m.id}`}
+                    className={cn('rounded-[var(--radius-md)] border px-3 py-2.5 text-left transition', method === m.id ? 'border-primary bg-primary/10' : 'border-border hover:border-border-strong')}
+                  >
+                    <div className="text-sm font-semibold">{m.title}</div>
+                    {m.hint && <div className="text-xs text-muted">{m.hint}</div>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="mt-5">
+            <div className="label mb-2">Промокод</div>
+            <div className="flex gap-2">
+              <input className="input uppercase" value={promo} onChange={(e) => setPromo(e.target.value)} placeholder="Например, BOOST10" maxLength={32} aria-label="Промокод" />
+              <Button variant="secondary" onClick={applyPromo} loading={promoLoading} disabled={!promo.trim()}>
+                Применить
+              </Button>
+            </div>
+          </div>
+          {Number(bonus) > 0 && (
             <div className="mt-4 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
-              Активен бонус +{Number(bonusPercent)}% к этому пополнению{valid && ` (+${formatMoney((num * Number(bonusPercent)) / 100)})`}
+              Активен бонус +{Number(bonus)}% к этому пополнению{valid && ` (+${formatMoney((num * Number(bonus)) / 100)})`}
             </div>
           )}
-          <Button size="lg" className="mt-6 w-full" disabled={!valid} loading={loading} onClick={submit} data-testid="deposit-submit">
+          <Button size="lg" className="mt-6 w-full" disabled={!valid || !method} loading={loading} onClick={submit} data-testid="deposit-submit">
             <CreditCard className="size-4" /> Перейти к оплате {valid && formatMoney(num)}
           </Button>
           <p className="mt-3 flex items-center gap-1.5 text-xs text-muted">
             <ShieldCheck className="size-3.5 text-success" /> Мы не храним данные карт. Оплата проходит на стороне провайдера.
           </p>
-          {mock && <p className="mt-2 text-xs text-warning">Режим разработки: используется тестовый (mock) платёжный провайдер.</p>}
+          {method === 'mock' && <p className="mt-2 text-xs text-warning">Режим разработки: тестовая оплата без реальных денег.</p>}
         </section>
         <aside className="card p-5">
           <div className="mb-3 font-display font-semibold">Последние платежи</div>

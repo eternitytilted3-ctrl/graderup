@@ -2,6 +2,8 @@ import 'server-only'
 import { asc, eq, sql } from 'drizzle-orm'
 import { getDb } from '../db/client'
 import { caseCategories, caseItems, cases, items } from '../db/schema'
+import { getSetting } from '../services/settings'
+import { familyExpectedPrice } from '../services/wear'
 
 export const CASE_CATEGORIES = [
   { slug: 'new', name: 'Новинки', sortOrder: 0 },
@@ -72,9 +74,25 @@ export function weightsFor(prices: number[], casePrice: number, rtp: number) {
  */
 export async function buildCases(opts: { rtp?: number } = {}) {
   const db = getDb()
-  const pool = await db.select().from(items).where(eq(items.isActive, true)).orderBy(asc(items.price))
-  if (pool.length === 0) throw new Error('No items to build cases from')
-  const rtp = opts.rtp ?? 0.9
+  const all = await db.select().from(items).where(eq(items.isActive, true)).orderBy(asc(items.price))
+  if (all.length === 0) throw new Error('No items to build cases from')
+  const [casesCfg, dropCfg] = await Promise.all([getSetting('cases'), getSetting('drops')])
+  const rtp = opts.rtp ?? casesCfg.rtp
+  // One entry per skin (exterior is rolled on drop): representative = Field-Tested if present.
+  const families = new Map<string, (typeof all)[number][]>()
+  for (const i of all) {
+    const key = i.baseName ?? i.name
+    families.set(key, [...(families.get(key) ?? []), i])
+  }
+  const expected = new Map<string, number>()
+  const pool = [...families.values()]
+    .map((fam) => {
+      const rep = fam.find((i) => i.wear === 'Field-Tested') ?? fam[Math.floor(fam.length / 2)]
+      expected.set(rep.id, familyExpectedPrice(fam, dropCfg.wearWeights).toNumber())
+      return rep
+    })
+    .sort((a, b) => expected.get(a.id)! - expected.get(b.id)!)
+  const priceOf = (i: (typeof all)[number]) => expected.get(i.id) ?? Number(i.price)
 
   const catIds = new Map<string, string>()
   for (const c of CASE_CATEGORIES) {
@@ -92,34 +110,34 @@ export async function buildCases(opts: { rtp?: number } = {}) {
   for (const preset of CASE_PRESETS) {
     const lo = preset.price * 0.1
     const hi = preset.price * 40
-    let band = pool.filter((i) => Number(i.price) >= lo && Number(i.price) <= hi)
+    let band = pool.filter((i) => priceOf(i) >= lo && priceOf(i) <= hi)
     if (preset.theme) {
-      const special = pool.filter((i) => (preset.theme === 'knives' ? isKnife(i.name) : isGloves(i.name)) && Number(i.price) <= hi * 3)
-      band = [...band.filter((i) => Number(i.price) < preset.price * 1.5 && !i.name.startsWith('★')), ...special]
+      const special = pool.filter((i) => (preset.theme === 'knives' ? isKnife(i.name) : isGloves(i.name)) && priceOf(i) <= hi * 3)
+      band = [...band.filter((i) => priceOf(i) < preset.price * 1.5 && !i.name.startsWith('★')), ...special]
     }
     if (band.length < 4) continue
     const want = Math.min(14, band.length)
     const picked = new Map<string, (typeof band)[number]>()
     const weaponsUsed = new Set<string>()
-    const bandLo = Math.max(lo, Number(band[0].price))
-    const bandHi = Math.max(...band.map((b) => Number(b.price)))
+    const bandLo = Math.max(lo, priceOf(band[0]))
+    const bandHi = Math.max(...band.map((b) => priceOf(b)))
     for (let k = 0; k < want; k++) {
       const target = Math.exp(Math.log(bandLo) + ((Math.log(bandHi) - Math.log(bandLo)) * (k + 0.5)) / want)
-      const sorted = [...band].sort((a, b) => Math.abs(Math.log(Number(a.price) / target)) - Math.abs(Math.log(Number(b.price) / target)))
+      const sorted = [...band].sort((a, b) => Math.abs(Math.log(priceOf(a) / target)) - Math.abs(Math.log(priceOf(b) / target)))
       const choice = sorted.find((i) => !picked.has(i.id) && !weaponsUsed.has(i.name.split(' | ')[0])) ?? sorted.find((i) => !picked.has(i.id))
       if (!choice) continue
       picked.set(choice.id, choice)
       weaponsUsed.add(choice.name.split(' | ')[0])
     }
     // Guarantee at least 3 items cheaper than the case (otherwise EV/RTP cannot be met).
-    const cheap = band.filter((i) => Number(i.price) < preset.price && !picked.has(i.id))
-    while ([...picked.values()].filter((i) => Number(i.price) < preset.price).length < 3 && cheap.length) {
+    const cheap = band.filter((i) => priceOf(i) < preset.price && !picked.has(i.id))
+    while ([...picked.values()].filter((i) => priceOf(i) < preset.price).length < 3 && cheap.length) {
       const c = cheap.pop()!
       picked.set(c.id, c)
     }
     const list = [...picked.values()]
-    if (!list.some((i) => Number(i.price) < preset.price) || !list.some((i) => Number(i.price) > preset.price)) continue
-    const weights = weightsFor(list.map((i) => Number(i.price)), preset.price, rtp)
+    if (!list.some((i) => priceOf(i) < preset.price) || !list.some((i) => priceOf(i) > preset.price)) continue
+    const weights = weightsFor(list.map((i) => priceOf(i)), preset.price, rtp)
     const total = weights.reduce((a, b) => a + b, 0)
     await db.transaction(async (tx) => {
       const [c] = await tx

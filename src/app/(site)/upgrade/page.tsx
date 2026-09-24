@@ -6,7 +6,7 @@ import { UpgradeView } from './UpgradeView'
 
 export const metadata: Metadata = {
   title: 'Апгрейд предметов',
-  description: 'Улучшайте предметы GraderUP до более ценных: шанс рассчитывается на сервере по прозрачной формуле.',
+  description: 'Улучшайте предметы GraderUP до более ценных: шанс рассчитывается на сервере по понятной формуле.',
   alternates: { canonical: '/upgrade' },
 }
 

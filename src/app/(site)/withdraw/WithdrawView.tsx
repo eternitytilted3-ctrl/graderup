@@ -2,6 +2,9 @@
 
 import { useState, type FormEvent } from 'react'
 import { PageHeader } from '@/components/domain/PageHeader'
+import { SkinWithdrawalsList } from '@/components/domain/SkinWithdrawalsList'
+import { Tabs } from '@/components/ui/Tabs'
+import { useSearchParams } from 'next/navigation'
 import { useSession } from '@/components/SessionProvider'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -26,6 +29,8 @@ export function WithdrawView() {
   const { data, error, reload } = useFetch<Resp>('/api/withdraw')
   const [loading, setLoading] = useState(false)
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({})
+  const params = useSearchParams()
+  const [tab, setTab] = useState<'balance' | 'skins'>(params.get('tab') === 'skins' ? 'skins' : 'balance')
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -50,8 +55,19 @@ export function WithdrawView() {
 
   return (
     <div className="container-page">
-      <PageHeader title="Вывод средств" description="Заявки обрабатываются вручную. Сумма резервируется сразу и возвращается при отклонении." />
-      {error ? (
+      <PageHeader title="Вывод" description="Скины — прямо в Steam через трейд. Баланс — заявкой, которая обрабатывается вручную." />
+      <Tabs
+        className="mb-5"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'skins', label: 'Скины в Steam' },
+          { value: 'balance', label: 'Баланс' },
+        ]}
+      />
+      {tab === 'skins' ? (
+        <SkinWithdrawalsList />
+      ) : error ? (
         <ErrorState description={error.message} onRetry={reload} />
       ) : !data ? (
         <Skeleton className="h-80" />

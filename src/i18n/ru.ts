@@ -26,7 +26,7 @@ export const ru = {
     refund: 'Возврат',
     admin_adjustment: 'Корректировка',
   },
-  itemStatus: { available: 'Доступен', locked: 'Заблокирован', sold: 'Продан', used: 'Использован' },
+  itemStatus: { available: 'Доступен', locked: 'Выводится', sold: 'Продан', used: 'Использован', withdrawn: 'Выведен в Steam' },
   itemSource: { case: 'Кейс', upgrade: 'Апгрейд', reward: 'Награда', promocode: 'Промокод', admin: 'Администратор' },
   paymentStatus: { pending: 'Ожидает', completed: 'Оплачен', failed: 'Ошибка', cancelled: 'Отменён', expired: 'Истёк' },
   withdrawalStatus: { pending: 'На рассмотрении', approved: 'Одобрен', rejected: 'Отклонён', completed: 'Выплачен' },

@@ -4,7 +4,9 @@ import { closeDb, getDb } from '@/server/db/client'
 import { payments, userItems } from '@/server/db/schema'
 import { getMockProvider } from '@/server/payments'
 import { openCase, openCases } from '@/server/services/cases'
-import { listInventory, sellItems } from '@/server/services/inventory'
+import { listInventory, sellAllItems, sellItems } from '@/server/services/inventory'
+import { requestSkinWithdrawal, setTradeUrl, cancelSkinWithdrawal } from '@/server/services/skinWithdrawals'
+import { requestWithdrawal } from '@/server/services/withdrawals'
 import { createPayment, handleWebhook } from '@/server/services/payments'
 import { redeemPromocode } from '@/server/services/promocodes'
 import { claimReward } from '@/server/services/rewards'
@@ -111,6 +113,39 @@ describe('multi-source upgrade', () => {
   })
 })
 
+describe('sell all / withdrawals', () => {
+  it('sell-all sells every available item once (parallel calls)', async () => {
+    const u = await createUser('10.00')
+    await openCases(u.id, cat.case.id, 5)
+    const rs = await settle([sellAllItems(u.id), sellAllItems(u.id), sellAllItems(u.id)])
+    expect(ok(rs)).toBe(1)
+    expect((await listInventory(u.id, { page: 1, pageSize: 10 })).total).toBe(0)
+    expect(await ledgerConsistent(u.id)).toBe(true)
+  })
+
+  it('balance withdrawal: max amount and one request per day', async () => {
+    const u = await createUser('2000.00')
+    await expect(requestWithdrawal(u.id, { amount: 600, method: 'card', destination: '4111111111111111' })).rejects.toMatchObject({ status: 400 })
+    const rs = await settle([1, 2, 3].map(() => requestWithdrawal(u.id, { amount: 500, method: 'card', destination: '4111111111111111' })))
+    expect(ok(rs)).toBe(1)
+    expect(await balanceOf(u.id)).toBe('1500.00')
+  })
+
+  it('skin withdrawal locks the item; double request fails; cancel returns it', async () => {
+    const u = await createUser('2.00')
+    const { userItemId } = await openCase(u.id, cat.case.id)
+    await expect(requestSkinWithdrawal(u.id, userItemId)).rejects.toMatchObject({ status: 422 }) // no trade URL yet
+    await setTradeUrl(u.id, 'https://steamcommunity.com/tradeoffer/new/?partner=123456&token=AbCdEf12')
+    const rs = await settle([requestSkinWithdrawal(u.id, userItemId), requestSkinWithdrawal(u.id, userItemId)])
+    expect(ok(rs)).toBe(1)
+    await expect(sellItems(u.id, [userItemId])).rejects.toMatchObject({ code: 'ITEM_UNAVAILABLE' })
+    const w = (rs.find((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{ id: string }>).value
+    const admin = await createUser()
+    await cancelSkinWithdrawal(admin.id, w.id)
+    expect((await sellItems(u.id, [userItemId])).soldCount).toBe(1)
+  })
+})
+
 describe('selling', () => {
   it('parallel sells of the same item succeed exactly once', async () => {
     const u = await createUser('2.00')
@@ -173,7 +208,7 @@ describe('rewards & promocodes', () => {
 describe('payments', () => {
   it('replayed webhook credits once; forged signature rejected', async () => {
     const u = await createUser()
-    const p = await createPayment(u.id, 2500)
+    const p = await createPayment(u.id, 2500, 'mock')
     const hook = getMockProvider().buildWebhook({ externalId: `mock_${p.id}`, paymentId: p.id, status: 'completed', amount: p.amount, currency: p.currency })
     const headers = new Headers({ 'x-mock-signature': hook.signature })
     await settle(Array.from({ length: 5 }, () => handleWebhook('mock', hook.body, headers)))

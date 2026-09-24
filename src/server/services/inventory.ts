@@ -120,3 +120,39 @@ export async function getUserItem(userId: string, userItemId: string) {
     item: toItemDTO(row.item, true),
   }
 }
+
+/** Sells every available item of the user in one DB transaction (one ledger row per item). */
+export async function sellAllItems(userId: string, ip?: string) {
+  const sellRatio = (await getSetting('inventory')).sellRatio
+  const out = await getDb().transaction(async (tx) => {
+    await lockUser(tx, userId)
+    const sold = await tx
+      .update(userItems)
+      .set({ status: 'sold', updatedAt: new Date() })
+      .where(and(eq(userItems.userId, userId), eq(userItems.status, 'available')))
+      .returning({ id: userItems.id, itemId: userItems.itemId })
+    if (sold.length === 0) throw Errors.conflict('Нет предметов для продажи', 'NOTHING_TO_SELL')
+    const itemRows = await tx.select().from(items).where(inArray(items.id, [...new Set(sold.map((s) => s.itemId))]))
+    const byId = new Map(itemRows.map((i) => [i.id, i]))
+    let total = D(0)
+    let balance = '0'
+    for (const s of sold) {
+      const item = byId.get(s.itemId)!
+      const amount = toMoney(D(item.price).mul(sellRatio), 1)
+      total = total.plus(amount)
+      balance = (
+        await applyBalanceChange(tx, {
+          userId,
+          type: 'item_sell',
+          amount,
+          referenceType: 'user_item',
+          referenceId: s.id,
+          meta: { itemId: item.id, itemName: item.name, itemPrice: item.price, rarity: item.rarity, sellRatio, bulk: 'all' },
+        })
+      ).balanceAfter
+    }
+    return { soldCount: sold.length, amount: toMoney(total), balance }
+  })
+  void logEvent('item_sell_all', { userId, ip, details: { count: out.soldCount, amount: out.amount } })
+  return out
+}
