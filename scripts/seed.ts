@@ -174,6 +174,14 @@ async function main() {
     .insert(users)
     .values({ username: 'admin', email: adminEmail, passwordHash: await hashPassword(adminPassword), role: 'superadmin', referralCode: newReferralCode() })
     .returning()
+  console.log(`✓ admin: ${adminEmail}`)
+  // Production installs set SEED_DEMO=false: no demo accounts and no demo drops in the live feed.
+  if (process.env.SEED_DEMO === 'false') {
+    console.log('\nLogin credentials:')
+    console.log(`  admin: ${adminEmail} / ${adminPassword}  (вход: /cmsadmin)`)
+    await closeDb()
+    return
+  }
   const demoHash = await hashPassword(demoPassword)
   const demoNames = ['demo', 'lucky_fox', 'nightowl', 'pixel_hunter']
   const demo: (typeof users.$inferSelect)[] = []

@@ -145,6 +145,20 @@ SQLi — параметризованные запросы Drizzle; XSS — Reac
 6. Создайте администратора: `npm run admin:create -- --email … --username … --password …`.
 7. Cron: `npm run prices:sync` (если используете рыночные цены).
 
+### VPS одной командой (Docker)
+
+`docker-compose.prod.yml` поднимает PostgreSQL, приложение и nginx (перезаписывает `X-Real-IP`) на порту `PORT` (по умолчанию 4555). Наружу открыт только nginx.
+
+```bash
+git clone -b claude/gaming-platform-cases-inventory-is3k9h https://github.com/eternitytilted3-ctrl/graderup.git /opt/graderup
+cd /opt/graderup
+PUBLIC_HOST=45.131.186.197 PORT=4555 bash deploy/setup-vps.sh   # Docker, секреты, сборка, миграции, seed
+bash deploy/update.sh                                            # обновление: git pull + пересборка
+docker compose -f docker-compose.prod.yml logs -f app            # логи
+```
+
+`deploy/setup-vps.sh` создаёт `.env.production` (gitignored) со случайными секретами и паролем администратора (`SEED_ADMIN_PASSWORD`), `SEED_DEMO=false` (без демо-пользователей и демо-дропов). Mock-платежи и mock-вывод скинов в production выключены — подключите реальные ключи Pally/AnyPay/xRocket в `.env.production` и выполните `bash deploy/update.sh`. Для HTTPS привяжите домен и поставьте TLS (например, Caddy/certbot) перед nginx, затем смените `APP_URL` на `https://…`.
+
 ## Тесты
 
 - `tests/unit` — формула апгрейда, распределение, weighted pick, деньги, окна наград.
