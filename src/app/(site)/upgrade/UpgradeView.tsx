@@ -108,7 +108,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
     <div className="container-page">
       <PageHeader eyebrow="Upgrade" title="Апгрейд предмета" description={`Выберите предмет и цель дороже минимум в ${config.minMultiplier}×. Чем выше множитель — тем ниже шанс.`} />
 
-      <section className="card grid items-stretch gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8" aria-label="Апгрейд">
+      <section id="upgrade-panel" className="card grid scroll-mt-20 items-stretch gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8" aria-label="Апгрейд">
         <UpgradeCard label="Ваш предмет" item={source?.item ?? null} placeholder="Выберите предмет из инвентаря ниже" onClear={spinning ? undefined : () => { setSource(null); setState('idle') }} highlight={state === 'loss' ? 'loss' : null} />
         <div className="flex flex-col items-center justify-center gap-4 py-2">
           <ArrowRight className="hidden size-5 text-subtle lg:block" />
@@ -140,7 +140,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
             </Link>
           )}
         </div>
-        <UpgradeCard label="Цель" item={target} placeholder="Выберите целевой предмет справа" onClear={spinning ? undefined : () => { setTarget(null); setState('idle') }} highlight={state === 'win' ? 'win' : null} />
+        <UpgradeCard label="Цель" item={target} placeholder="Выберите целевой предмет из списка" onClear={spinning ? undefined : () => { setTarget(null); setState('idle') }} highlight={state === 'win' ? 'win' : null} />
       </section>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
@@ -211,7 +211,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
                       size="sm"
                       dimmed={tooFar}
                       selected={target?.id === i.id}
-                      onClick={spinning || tooFar ? undefined : () => { setTarget(i); setState('idle'); setResult(null) }}
+                      onClick={spinning || tooFar ? undefined : () => { setTarget(i); setState('idle'); setResult(null); if (window.innerWidth < 1024) document.getElementById('upgrade-panel')?.scrollIntoView({ behavior: 'smooth' }) }}
                       topRight={ratio ? <span className="rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-bold text-accent tnum">×{ratio.toDecimalPlaces(1).toString()}</span> : undefined}
                     />
                   )
