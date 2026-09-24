@@ -3,8 +3,8 @@
 @theme {
   --color-bg: #080b12;
   --color-bg-2: #0d111a;
-  --color-card: #111722;
-  --color-card-2: #151c29;
+  --color-card: #121822;
+  --color-card-2: #171e2a;
   --color-border: #202938;
   --color-border-strong: #2c3749;
   --color-primary: #7c5cff;
@@ -17,20 +17,21 @@
   --color-danger: #ff5570;
   --color-warning: #ffb547;
 
-  --color-r-common: #9aa4b5;
-  --color-r-uncommon: #36d6a8;
-  --color-r-rare: #3ea8ff;
-  --color-r-epic: #9b6bff;
-  --color-r-legendary: #ffb547;
-  --color-r-mythic: #ff4f8b;
+  /* Classic tactical-shooter rarity colours: grey → light blue → blue → purple → pink → gold */
+  --color-r-common: #b0c3d9;
+  --color-r-uncommon: #5e98d9;
+  --color-r-rare: #4b69ff;
+  --color-r-epic: #8847ff;
+  --color-r-legendary: #d32ce6;
+  --color-r-mythic: #e4ae39;
 
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-manrope), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-oswald), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
 
   --shadow-card: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -12px rgb(0 0 0 / 0.6);
   --shadow-glow: 0 0 0 1px rgb(124 92 255 / 0.35), 0 8px 32px -8px rgb(124 92 255 / 0.45);
@@ -103,9 +104,11 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 500px at 85% -10%, rgb(124 92 255 / 0.08), transparent 60%),
-    radial-gradient(900px 400px at -10% 10%, rgb(0 212 255 / 0.05), transparent 60%),
-    var(--color-bg);
+    url('/assets/topo.svg') center top / 900px auto repeat,
+    radial-gradient(1200px 600px at 70% -10%, rgb(196 160 96 / 0.07), transparent 60%),
+    radial-gradient(900px 500px at 0% 0%, rgb(124 92 255 / 0.07), transparent 60%),
+    linear-gradient(180deg, #0c1016 0%, var(--color-bg) 40%);
+  background-attachment: fixed;
   color: var(--color-text);
   font-family: var(--font-sans);
   font-feature-settings: 'cv11', 'ss01';
@@ -128,6 +131,13 @@ body {
 }
 
 @layer components {
+  .h-tactical {
+    @apply font-display font-semibold tracking-[0.02em] uppercase;
+  }
+  /* Item tile background: steel gradient like an in-game inventory slot */
+  .slot-bg {
+    background: linear-gradient(180deg, #2a303b 0%, #1a1f28 70%, #161a22 100%);
+  }
   .container-page {
     @apply mx-auto w-full max-w-[1320px] px-4 sm:px-6;
   }

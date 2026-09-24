@@ -50,7 +50,7 @@ export default async function CasePage({ params }: PageProps<'/cases/[slug]'>) {
         </div>
         <div>
           <div className="label mb-2 text-accent/80">Кейс</div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">{c.name}</h1>
+          <h1 className="h-tactical text-4xl sm:text-5xl">{c.name}</h1>
           <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted">{c.description}</p>
           <div className="mt-5 flex items-center gap-3 text-sm text-muted">
             <span className="font-display text-2xl font-bold text-text tnum">{formatMoney(c.price)}</span>
@@ -63,7 +63,7 @@ export default async function CasePage({ params }: PageProps<'/cases/[slug]'>) {
       <CaseOpener caseId={c.id} slug={c.slug} price={c.price} items={items} />
 
       <section className="pt-12">
-        <h2 className="mb-5 font-display text-xl font-bold tracking-tight">Возможные предметы</h2>
+        <h2 className="h-tactical mb-5 text-2xl">Возможные предметы</h2>
         <CaseItemsGrid items={items} />
       </section>
     </div>

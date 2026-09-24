@@ -1,5 +1,6 @@
 import { Footer } from '@/components/domain/Footer'
 import { Header } from '@/components/domain/Header'
+import { LiveSidebar } from '@/components/domain/LiveSidebar'
 import { MobileNav } from '@/components/domain/MobileNav'
 
 export default function SiteLayout({ children }: { children: React.ReactNode }) {
@@ -9,10 +10,13 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
         Перейти к содержимому
       </a>
       <Header />
-      <main id="main" className="min-h-[60vh]">
-        {children}
-      </main>
-      <Footer />
+      <LiveSidebar />
+      <div className="xl:pl-[220px]">
+        <main id="main" className="min-h-[60vh]">
+          {children}
+        </main>
+        <Footer />
+      </div>
       <MobileNav />
     </>
   )

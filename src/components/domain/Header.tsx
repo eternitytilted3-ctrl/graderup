@@ -36,26 +36,28 @@ export function Header() {
   useEffect(() => setMenu(false), [pathname])
 
   return (
-    <header className={cn('sticky top-0 z-40 border-b transition-colors duration-200', scrolled ? 'border-border bg-bg/85 backdrop-blur-xl' : 'border-transparent bg-transparent')}>
+    <header className={cn('sticky top-0 z-40 border-b border-border/80 bg-[#0d1118]/90 bg-[url(/assets/topo.svg)] bg-[length:700px_auto] backdrop-blur-xl transition-shadow duration-200', scrolled && 'shadow-[0_8px_24px_-12px_rgba(0,0,0,0.8)]')}>
       <div className="container-page flex h-16 items-center gap-4">
         <Logo />
-        <nav className="ml-6 hidden items-center gap-1 md:flex" aria-label="Основная навигация">
-          {NAV.map((n) => {
+        <nav className="hidden flex-1 items-center justify-center md:flex" aria-label="Основная навигация">
+          {NAV.map((n, i) => {
             const active = pathname === n.href || pathname.startsWith(n.href + '/')
             return (
-              <Link
-                key={n.href}
-                href={n.href}
-                aria-current={active ? 'page' : undefined}
-                className={cn('relative rounded-md px-3 py-2 text-sm font-medium transition', active ? 'text-text' : 'text-muted hover:text-text')}
-              >
-                {n.label}
-                {active && <span className="absolute inset-x-3 -bottom-[13px] h-0.5 rounded-full bg-gradient-to-r from-primary to-accent" />}
-              </Link>
+              <span key={n.href} className="flex items-center">
+                {i > 0 && <span className="h-5 w-px bg-border-strong" aria-hidden />}
+                <Link
+                  href={n.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn('relative px-5 py-2 font-display text-[17px] font-medium tracking-wide uppercase transition lg:px-7', active ? 'text-accent' : 'text-text/85 hover:text-text')}
+                >
+                  {n.label}
+                  {active && <span className="absolute inset-x-5 -bottom-[13px] h-0.5 bg-accent lg:inset-x-7" />}
+                </Link>
+              </span>
             )
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2 md:ml-0">
           {user ? (
             <>
               <BalanceWidget />

@@ -3,12 +3,12 @@ import { cn } from '@/lib/cn'
 import type { Rarity } from '@/lib/types'
 
 export const rarityColor: Record<Rarity, string> = {
-  common: '#9aa4b5',
-  uncommon: '#36d6a8',
-  rare: '#3ea8ff',
-  epic: '#9b6bff',
-  legendary: '#ffb547',
-  mythic: '#ff4f8b',
+  common: '#b0c3d9',
+  uncommon: '#5e98d9',
+  rare: '#4b69ff',
+  epic: '#8847ff',
+  legendary: '#d32ce6',
+  mythic: '#e4ae39',
 }
 
 export function RarityBadge({ rarity, className }: { rarity: Rarity; className?: string }) {

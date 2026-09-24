@@ -1,7 +1,7 @@
 import 'server-only'
 import { count, desc, eq, sql } from 'drizzle-orm'
 import { getDb } from '../db/client'
-import { caseOpenings, cases, items, upgrades, users } from '../db/schema'
+import { caseOpenings, cases, items, sessions, upgrades, users } from '../db/schema'
 import { toItemDTO } from './mappers'
 
 let publicCache: { at: number; data: Awaited<ReturnType<typeof loadPublicStats>> } | null = null
@@ -46,4 +46,16 @@ export async function popularCaseIds(limit = 8) {
     .orderBy(desc(sql`count(${caseOpenings.id})`))
     .limit(limit)
   return rows.map((r) => r.id)
+}
+
+let onlineCache: { at: number; n: number } | null = null
+/** Distinct users with a session seen in the last 5 minutes (cached 15s). */
+export async function usersOnline() {
+  if (onlineCache && Date.now() - onlineCache.at < 15_000) return onlineCache.n
+  const [r] = await getDb()
+    .select({ n: sql<number>`count(distinct ${sessions.userId})::int` })
+    .from(sessions)
+    .where(sql`${sessions.lastSeenAt} > now() - interval '5 minutes'`)
+  onlineCache = { at: Date.now(), n: r?.n ?? 0 }
+  return onlineCache.n
 }

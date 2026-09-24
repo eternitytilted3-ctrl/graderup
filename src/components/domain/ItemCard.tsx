@@ -38,7 +38,7 @@ export function ItemCard({
       type={onClick ? 'button' : undefined}
       aria-pressed={onClick ? Boolean(selected) : undefined}
       className={cn(
-        'group relative flex w-full flex-col overflow-hidden rounded-[var(--radius-lg)] border bg-card text-left transition-all duration-200',
+        'group slot-bg relative flex w-full flex-col overflow-hidden rounded-[var(--radius-md)] border text-left transition-all duration-200',
         'hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--r)_55%,transparent)] hover:shadow-[0_10px_30px_-12px_color-mix(in_srgb,var(--r)_55%,transparent)]',
         selected ? 'border-[var(--r)] shadow-[0_0_0_1px_var(--r),0_10px_30px_-10px_color-mix(in_srgb,var(--r)_70%,transparent)]' : 'border-border',
         onClick && 'cursor-pointer',
@@ -49,7 +49,7 @@ export function ItemCard({
       <div className={cn('relative flex items-center justify-center', size === 'sm' ? 'h-20' : 'h-28 sm:h-32')}>
         <div
           className="absolute inset-0 opacity-60 transition-opacity duration-300 group-hover:opacity-100"
-          style={{ background: 'radial-gradient(60% 70% at 50% 60%, color-mix(in srgb, var(--r) 28%, transparent), transparent 70%)' }}
+          style={{ background: 'radial-gradient(55% 65% at 50% 60%, color-mix(in srgb, var(--r) 22%, transparent), transparent 70%)' }}
         />
         <Image
           src={item.image}
@@ -64,7 +64,7 @@ export function ItemCard({
         )}
         {topRight && <div className="absolute top-2 right-2">{topRight}</div>}
       </div>
-      <div className={cn('flex flex-1 flex-col gap-1 border-t border-white/[0.04]', size === 'sm' ? 'px-2.5 py-2' : 'px-3 py-2.5')}>
+      <div className={cn('flex flex-1 flex-col gap-1 bg-black/20', size === 'sm' ? 'px-2.5 py-2' : 'px-3 py-2.5')}>
         <RarityBadge rarity={item.rarity} />
         <div className="min-w-0">
           <div className={cn('truncate font-semibold', size === 'sm' ? 'text-xs' : 'text-[13px]')} title={item.name}>
@@ -75,7 +75,7 @@ export function ItemCard({
         <div className={cn('mt-auto pt-1 font-display font-bold text-text tnum', size === 'sm' ? 'text-xs' : 'text-sm')}>{formatMoney(item.price)}</div>
         {footer}
       </div>
-      <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ background: 'linear-gradient(90deg, transparent, var(--r), transparent)' }} />
+      <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: 'var(--r)', boxShadow: '0 -2px 10px color-mix(in srgb, var(--r) 60%, transparent)' }} />
     </Comp>
   )
 }

@@ -29,22 +29,67 @@ const RANGES: Record<Rarity, [number, number]> = {
   mythic: [400, 2500],
 }
 
-const ARCHETYPES: { art: string; name: string; desc: string }[] = [
-  { art: 'blade', name: 'Vector Blade', desc: 'Прямой клинок с балансом, смещённым к рукояти.' },
-  { art: 'karambit', name: 'Hook Talon', desc: 'Изогнутый клинок с кольцом для хвата.' },
-  { art: 'pistol', name: 'Pulse P9', desc: 'Компактный пистолет с облегчённым затвором.' },
-  { art: 'rifle', name: 'Strata AR', desc: 'Штурмовая винтовка модульной конструкции.' },
-  { art: 'sniper', name: 'Longwatch SR', desc: 'Снайперская винтовка с длинным стволом.' },
-  { art: 'smg', name: 'Hornet SMG', desc: 'Пистолет-пулемёт для ближнего боя.' },
-  { art: 'shotgun', name: 'Breaker 12', desc: 'Помповое ружьё с усиленным цевьём.' },
-  { art: 'gloves', name: 'Grip Gloves', desc: 'Тактические перчатки с усиленными пальцами.' },
-  { art: 'helmet', name: 'Visor Helm', desc: 'Шлем с панорамным визором.' },
-  { art: 'grenade', name: 'Shock Charge', desc: 'Коллекционная граната-сувенир.' },
-  { art: 'sticker', name: 'Crest Sticker', desc: 'Голографическая наклейка-герб.' },
-  { art: 'gem', name: 'Core Shard', desc: 'Кристалл с внутренним свечением.' },
-  { art: 'key', name: 'Vault Key', desc: 'Ключ от закрытого хранилища.' },
-  { art: 'charm', name: 'Hex Charm', desc: 'Подвеска-брелок в форме шестигранника.' },
-]
+// Generic weapon designations + ORIGINAL finish names (no third-party skin names/art).
+const POOLS: Record<Rarity, { art: string; name: string }[]> = {
+  common: [
+    { art: 'sticker', name: 'Sticker' },
+    { art: 'charm', name: 'Charm' },
+    { art: 'pistol', name: 'Glock-18' },
+    { art: 'pistol', name: 'P250' },
+    { art: 'smg', name: 'MP9' },
+    { art: 'shotgun', name: 'Nova' },
+    { art: 'grenade', name: 'Charm' },
+  ],
+  uncommon: [
+    { art: 'pistol', name: 'USP-S' },
+    { art: 'smg', name: 'MAC-10' },
+    { art: 'smg', name: 'UMP-45' },
+    { art: 'rifle', name: 'Galil AR' },
+    { art: 'shotgun', name: 'XM1014' },
+    { art: 'sticker', name: 'Sticker' },
+  ],
+  rare: [
+    { art: 'rifle', name: 'FAMAS' },
+    { art: 'smg', name: 'P90' },
+    { art: 'sniper', name: 'SSG 08' },
+    { art: 'pistol', name: 'Five-SeveN' },
+    { art: 'rifle', name: 'AUG' },
+  ],
+  epic: [
+    { art: 'rifle', name: 'M4A1-S' },
+    { art: 'rifle', name: 'M4A4' },
+    { art: 'pistol', name: 'Desert Eagle' },
+    { art: 'sniper', name: 'AWP' },
+    { art: 'rifle', name: 'AK-47' },
+  ],
+  legendary: [
+    { art: 'rifle', name: 'AK-47' },
+    { art: 'sniper', name: 'AWP' },
+    { art: 'gloves', name: '★ Sport Gloves' },
+    { art: 'blade', name: '★ Bayonet' },
+  ],
+  mythic: [
+    { art: 'karambit', name: '★ Karambit' },
+    { art: 'blade', name: '★ Butterfly Knife' },
+    { art: 'gloves', name: '★ Driver Gloves' },
+  ],
+}
+
+const WEARS = ['Factory New', 'Minimal Wear', 'Field-Tested', 'Well-Worn', 'Battle-Scarred']
+
+const DESCRIPTIONS: Record<string, string> = {
+  sticker: 'Голографическая наклейка из коллекции GraderUP.',
+  charm: 'Брелок-подвеска для оружия.',
+  grenade: 'Брелок в форме гранаты.',
+  pistol: 'Пистолет с оригинальной раскраской.',
+  smg: 'Пистолет-пулемёт для ближнего боя.',
+  shotgun: 'Дробовик с усиленной отделкой.',
+  rifle: 'Винтовка с оригинальной раскраской.',
+  sniper: 'Снайперская винтовка с оригинальной раскраской.',
+  gloves: 'Перчатки с кастомной отделкой.',
+  blade: 'Нож редкой отделки.',
+  karambit: 'Изогнутый нож — одна из самых редких находок.',
+}
 
 const FINISHES: Record<Rarity, string[]> = {
   common: ['Graphite', 'Sandstone', 'Field Grey', 'Ash', 'Concrete'],
@@ -109,13 +154,14 @@ async function main() {
     const [lo, hi] = RANGES[rarity]
     const perRarity = { common: 14, uncommon: 13, rare: 12, epic: 11, legendary: 8, mythic: 6 }[rarity]
     for (let i = 0; i < perRarity; i++) {
-      const a = ARCHETYPES[(i * 5 + rarity.length) % ARCHETYPES.length]
+      const a = POOLS[rarity][i % POOLS[rarity].length]
       const finish = FINISHES[rarity][i % FINISHES[rarity].length]
+      const isWeapon = !['sticker', 'charm', 'grenade'].includes(a.art)
+      const wear = isWeapon ? ` (${WEARS[(i + rarity.length) % WEARS.length]})` : ''
       const price = round2(Math.exp(between(Math.log(lo), Math.log(hi))))
       const [row] = await db
         .insert(items)
-        .values({ name: `${a.name} | ${finish}`, image: `/assets/items/${a.art}.svg`, price: price.toFixed(2), rarity, description: a.desc })
-        .onConflictDoNothing()
+        .values({ name: `${a.name} | ${finish}${wear}`, image: `/assets/items/${a.art}.svg`, price: price.toFixed(2), rarity, description: DESCRIPTIONS[a.art] ?? '' })
         .returning()
       if (row) itemRows.push(row)
     }

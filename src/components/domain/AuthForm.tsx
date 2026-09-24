@@ -84,7 +84,7 @@ export function AuthForm({ mode, steamEnabled }: { mode: 'login' | 'register'; s
   return (
     <div className="mx-auto w-full max-w-md py-10 sm:py-16">
       <div className="card p-6 sm:p-8">
-        <h1 className="font-display text-2xl font-extrabold tracking-tight">{mode === 'login' ? 'Вход в аккаунт' : 'Создание аккаунта'}</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight">{mode === 'login' ? 'Вход в аккаунт' : 'Создание аккаунта'}</h1>
         <p className="mt-1.5 text-sm text-muted">{mode === 'login' ? 'Рады видеть вас снова.' : 'Регистрация займёт меньше минуты.'}</p>
         {formError && (
           <div role="alert" className="mt-5 rounded-md border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger">

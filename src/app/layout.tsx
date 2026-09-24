@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Manrope } from 'next/font/google'
+import { Inter, Oswald } from 'next/font/google'
 import { SessionProvider } from '@/components/SessionProvider'
 import { ToastProvider } from '@/components/ui/Toast'
 import { siteDescription, siteName, siteUrl } from '@/lib/site'
@@ -8,7 +8,7 @@ import { toPublicUser } from '@/server/services/mappers'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin', 'cyrillic'], variable: '--font-inter', display: 'swap' })
-const manrope = Manrope({ subsets: ['latin', 'cyrillic'], variable: '--font-manrope', display: 'swap', weight: ['500', '600', '700', '800'] })
+const oswald = Oswald({ subsets: ['latin', 'cyrillic'], variable: '--font-oswald', display: 'swap', weight: ['400', '500', '600', '700'] })
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -31,7 +31,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const auth = await getCurrentAuth()
   return (
-    <html lang="ru" className={`${inter.variable} ${manrope.variable}`}>
+    <html lang="ru" className={`${inter.variable} ${oswald.variable}`}>
       <body>
         <SessionProvider initialUser={auth ? toPublicUser(auth.user) : null}>
           <ToastProvider>{children}</ToastProvider>

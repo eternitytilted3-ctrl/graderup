@@ -112,7 +112,7 @@ for (const [name, body] of Object.entries(items)) {
   writeFileSync(join(root, 'items', `${name}.svg`), svg(body))
 }
 
-// Cases: isometric container with a per-case palette and emblem.
+// Cases: front-facing weapon crate (original drawing) with per-case palette and emblem.
 const emblems = {
   bolt: 'M104 52 L84 86 H100 L94 112 L118 74 H102 Z',
   star: 'M100 50 L108 74 H132 L112 88 L120 112 L100 98 L80 112 L88 88 L68 74 H92 Z',
@@ -129,37 +129,48 @@ const emblems = {
 }
 
 const palettes = [
-  ['starter', '#5B6B88', '#2A3345', 'bolt'],
-  ['neon-rush', '#00D4FF', '#123E5C', 'wave'],
+  ['starter', '#6B7686', '#2B313B', 'bolt'],
+  ['neon-rush', '#22C3E6', '#0F4A5C', 'wave'],
+  ['emerald', '#3FAE5A', '#15401F', 'leaf'],
+  ['night-ops', '#4A5361', '#16191F', 'eye'],
   ['violet-core', '#7C5CFF', '#2B1F66', 'diamond'],
-  ['ember', '#FF7A45', '#5A1E10', 'flame'],
-  ['emerald', '#35D07F', '#10432B', 'leaf'],
-  ['night-ops', '#8993A4', '#151A26', 'eye'],
-  ['arctic', '#9FE8FF', '#1D4A66', 'star'],
-  ['royal', '#FFB547', '#5A3A0C', 'crown'],
-  ['phantom', '#C06CFF', '#35104F', 'skull'],
-  ['lunar', '#B7C4FF', '#1E2750', 'moon'],
-  ['prism', '#FF5570', '#4A1024', 'ring'],
-  ['quantum', '#4FE3FF', '#281A6B', 'cube'],
+  ['arctic', '#8FB8D8', '#27435A', 'star'],
+  ['ember', '#E0662A', '#5A1E10', 'flame'],
+  ['lunar', '#8C95C8', '#262B4E', 'moon'],
+  ['phantom', '#A34FD6', '#35104F', 'skull'],
+  ['prism', '#D8324F', '#4A1024', 'ring'],
+  ['royal', '#D9A13A', '#5A3A0C', 'crown'],
+  ['quantum', '#3E7BFF', '#141F66', 'cube'],
 ]
 
 for (const [slug, light, deep, emblem] of palettes) {
   const id = slug.replace(/-/g, '')
-  const body = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" fill="none">
+  const body = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160" fill="none">
   <defs>
-    <linearGradient id="${id}t" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${deep}"/></linearGradient>
-    <linearGradient id="${id}l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${deep}"/><stop offset="1" stop-color="#0A0D14"/></linearGradient>
-    <linearGradient id="${id}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${light}" stop-opacity=".75"/><stop offset="1" stop-color="${deep}"/></linearGradient>
-    <radialGradient id="${id}g" cx=".5" cy=".55" r=".5"><stop offset="0" stop-color="${light}" stop-opacity=".45"/><stop offset="1" stop-color="${light}" stop-opacity="0"/></radialGradient>
+    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${deep}"/></linearGradient>
+    <linearGradient id="${id}l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${light}"/><stop offset=".6" stop-color="${deep}"/></linearGradient>
+    <linearGradient id="${id}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8E2D0"/><stop offset="1" stop-color="#8A7E62"/></linearGradient>
+    <radialGradient id="${id}g" cx=".5" cy=".6" r=".5"><stop offset="0" stop-color="${light}" stop-opacity=".35"/><stop offset="1" stop-color="${light}" stop-opacity="0"/></radialGradient>
+    <filter id="${id}s" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity=".55"/></filter>
   </defs>
-  <ellipse cx="100" cy="92" rx="92" ry="60" fill="url(#${id}g)"/>
-  <path d="M100 22 L172 50 L100 78 L28 50 Z" fill="url(#${id}t)"/>
-  <path d="M28 50 L100 78 V146 L28 118 Z" fill="url(#${id}l)"/>
-  <path d="M172 50 L100 78 V146 L172 118 Z" fill="url(#${id}r)"/>
-  <path d="M28 50 L100 78 L172 50" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/>
-  <path d="M100 78 V146" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>
-  <path d="M64 36 L136 64" stroke="#fff" stroke-opacity=".22" stroke-width="6"/>
-  <g transform="translate(36 34) scale(.64)" opacity=".95"><path d="${emblems[emblem]}" fill="#fff" fill-opacity=".92" fill-rule="evenodd" stroke="#fff" stroke-opacity=".6" stroke-width="2"/></g>
+  <ellipse cx="110" cy="90" rx="104" ry="64" fill="url(#${id}g)"/>
+  <g filter="url(#${id}s)">
+    <path d="M22 50 Q22 34 38 32 H182 Q198 34 198 50 V60 H22 Z" fill="url(#${id}l)"/>
+    <rect x="22" y="58" width="176" height="84" rx="6" fill="url(#${id}f)"/>
+    <path d="M22 62 H198" stroke="#000" stroke-opacity=".45" stroke-width="3"/>
+    <path d="M40 36 V58 M70 34 V58 M150 34 V58 M180 36 V58" stroke="#000" stroke-opacity=".22" stroke-width="3"/>
+    <path d="M30 70 V134 M190 70 V134" stroke="#000" stroke-opacity=".25" stroke-width="4"/>
+    <rect x="22" y="58" width="176" height="84" rx="6" stroke="#fff" stroke-opacity=".12" stroke-width="1.5"/>
+    <rect x="44" y="52" width="16" height="22" rx="2" fill="url(#${id}m)"/>
+    <rect x="160" y="52" width="16" height="22" rx="2" fill="url(#${id}m)"/>
+    <rect x="48" y="66" width="8" height="5" rx="1" fill="#3b3426"/>
+    <rect x="164" y="66" width="8" height="5" rx="1" fill="#3b3426"/>
+    <rect x="198" y="84" width="8" height="30" rx="2" fill="#000" fill-opacity=".35"/>
+    <rect x="14" y="84" width="8" height="30" rx="2" fill="#000" fill-opacity=".35"/>
+    <path d="M40 132 H180" stroke="#fff" stroke-opacity=".08" stroke-width="2"/>
+    <g transform="translate(46 30) scale(.64)"><path d="${emblems[emblem]}" fill="url(#${id}m)" fill-rule="evenodd" stroke="#2b2418" stroke-opacity=".6" stroke-width="3"/></g>
+    <text x="110" y="134" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="10" letter-spacing="3" fill="#000" fill-opacity=".35">GRADERUP</text>
+  </g>
 </svg>
 `
   writeFileSync(join(root, 'cases', `${slug}.svg`), body)
@@ -175,3 +186,28 @@ writeFileSync(
 `,
 )
 console.log(`✓ generated ${Object.keys(items).length} item and ${palettes.length} case images`)
+
+// Topographic contour pattern (tileable-ish), used as a subtle header/body texture.
+{
+  let seed = 7
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+  const loops = []
+  const centers = [[180, 140], [620, 90], [420, 360], [760, 420], [90, 470]]
+  for (const [cx, cy] of centers) {
+    const phase = rnd() * 6
+    for (let k = 1; k <= 9; k++) {
+      const r = k * 22
+      const pts = []
+      for (let a = 0; a <= 64; a++) {
+        const t = (a / 64) * Math.PI * 2
+        const rr = r * (1 + 0.18 * Math.sin(3 * t + phase + k * 0.3) + 0.08 * Math.cos(5 * t + phase))
+        pts.push(`${(cx + rr * Math.cos(t)).toFixed(1)},${(cy + rr * 0.75 * Math.sin(t)).toFixed(1)}`)
+      }
+      loops.push(`<polyline points="${pts.join(' ')}"/>`)
+    }
+  }
+  writeFileSync(
+    join(root, 'topo.svg'),
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" fill="none" stroke="#9FB0C8" stroke-opacity=".09" stroke-width="1">${loops.join('')}</svg>\n`,
+  )
+}

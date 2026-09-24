@@ -77,7 +77,7 @@ export function UpgradeDial({ chance, state, rollFraction }: { chance: number | 
       </div>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <div className="label text-[10px]">Шанс</div>
-        <div className={cn('font-display text-4xl font-extrabold tnum', state === 'win' && 'text-success', state === 'loss' && 'text-danger')} data-testid="upgrade-chance">
+        <div className={cn('font-display text-4xl font-bold tnum', state === 'win' && 'text-success', state === 'loss' && 'text-danger')} data-testid="upgrade-chance">
           {chance === null ? '—' : `${chance.toFixed(2)}%`}
         </div>
         {state === 'win' && <div className="mt-1 text-sm font-bold text-success">Успех!</div>}

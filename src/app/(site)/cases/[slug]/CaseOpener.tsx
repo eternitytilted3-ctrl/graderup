@@ -69,18 +69,18 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
         {user ? (
           insufficient && !busy ? (
             <Link href="/deposit" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:min-w-64">
+              <Button size="lg" className="w-full sm:w-auto sm:min-w-72">
                 <Coins className="size-4" /> Пополнить баланс
               </Button>
             </Link>
           ) : (
-            <Button size="lg" onClick={open} loading={busy} className="w-full sm:min-w-64" data-testid="open-case">
+            <Button size="lg" onClick={open} loading={busy} className="w-full sm:w-auto sm:min-w-72" data-testid="open-case">
               {busy ? 'Открываем…' : `Открыть кейс · ${formatMoney(price)}`}
             </Button>
           )
         ) : (
           <Link href={`/login?next=/cases/${slug}`} className="w-full sm:w-auto">
-            <Button size="lg" className="w-full sm:min-w-64">
+            <Button size="lg" className="w-full sm:w-auto sm:min-w-72">
               Войдите, чтобы открыть
             </Button>
           </Link>
@@ -103,7 +103,7 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
             <div className="mt-1.5 font-display text-lg font-bold" data-testid="drop-name">
               {result.item.name}
             </div>
-            <div className="mt-1 font-display text-2xl font-extrabold tnum">{formatMoney(result.item.price)}</div>
+            <div className="mt-1 font-display text-2xl font-bold tnum">{formatMoney(result.item.price)}</div>
             <div className="mt-6 grid w-full gap-2 sm:grid-cols-2">
               <Button variant="secondary" onClick={sell} loading={selling}>
                 <Coins className="size-4" /> Продать · {formatMoney(result.sellPrice)}

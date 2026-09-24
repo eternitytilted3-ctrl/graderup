@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 function SectionTitle({ title, href, cta }: { title: string; href?: string; cta?: string }) {
   return (
     <div className="mb-5 flex items-end justify-between gap-4">
-      <h2 className="font-display text-xl font-bold tracking-tight sm:text-2xl">{title}</h2>
+      <h2 className="h-tactical text-2xl sm:text-[28px]">{title}</h2>
       {href && (
         <Link href={href} className="group flex items-center gap-1 text-sm font-medium text-muted transition hover:text-text">
           {cta ?? 'Все'} <ArrowRight className="size-4 transition group-hover:translate-x-0.5" />
@@ -38,7 +38,7 @@ export default async function HomePage() {
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-card/70 px-3 py-1 text-xs text-muted">
             <ShieldCheck className="size-3.5 text-success" /> Результаты рассчитываются на сервере
           </div>
-          <h1 className="font-display text-[34px] leading-[1.08] font-extrabold tracking-tight sm:text-5xl">
+          <h1 className="h-tactical text-[40px] leading-[1.02] sm:text-6xl">
             Открывай кейсы.
             <br />
             <span className="bg-gradient-to-r from-[#a491ff] via-primary to-accent bg-clip-text text-transparent">Улучшай предметы.</span>
@@ -90,7 +90,7 @@ export default async function HomePage() {
       </section>
 
       {/* Live */}
-      <section className="py-4" aria-label="Последние выигрыши">
+      <section className="py-4 xl:hidden" aria-label="Последние выигрыши">
         <LiveDrops initial={drops} />
       </section>
 

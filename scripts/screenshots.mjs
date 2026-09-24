@@ -1,7 +1,8 @@
+// Dev helper: full-page screenshots. Usage: node scripts/screenshots.mjs http://localhost:3000 ./screenshots 390 "/,/cases" [login:password]
 import { chromium } from '@playwright/test'
 // usage: node .shot2.mjs base outdir width "path1,path2" [login]
 const [,, base, outdir, w, paths, login] = process.argv
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' })
+const b = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {})
 const ctx = await b.newContext({ viewport: { width: +w, height: 900 } })
 const p = await ctx.newPage()
 const errors = []
