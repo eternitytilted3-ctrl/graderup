@@ -1,0 +1,79 @@
+/** DTOs shared between server responses and client components. Money = string (2 dp). */
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic'
+
+export interface ItemDTO {
+  id: string
+  name: string
+  image: string
+  price: string
+  rarity: Rarity
+  description?: string
+}
+
+export interface CaseItemDTO extends ItemDTO {
+  chance: string
+}
+
+export interface CaseDTO {
+  id: string
+  name: string
+  slug: string
+  description: string
+  image: string
+  price: string
+  status: 'active' | 'disabled'
+  isFeatured?: boolean
+  itemCount?: number
+  topRarity?: Rarity
+}
+
+export interface InventoryItemDTO {
+  id: string
+  status: 'available' | 'locked' | 'sold' | 'used'
+  source: string
+  createdAt: string
+  item: ItemDTO
+}
+
+export interface PublicUserDTO {
+  id: string
+  username: string
+  email: string | null
+  avatarUrl: string | null
+  role: 'user' | 'admin' | 'superadmin'
+  balance: string
+  referralCode: string
+  createdAt: string
+}
+
+export interface Paginated<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
+export interface OpenCaseResult {
+  openingId: string
+  userItemId: string
+  item: ItemDTO
+  reel: ItemDTO[]
+  winIndex: number
+  balance: string
+  sellPrice: string
+}
+
+export interface UpgradeResultDTO {
+  upgradeId: string
+  result: 'win' | 'loss'
+  chance: string
+  roll: number
+  /** Position on the dial, 0..1, derived from the server roll (visualization only). */
+  rollFraction: number
+  source: ItemDTO
+  target: ItemDTO
+  resultUserItemId: string | null
+}
+
+export const RARITIES: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic']

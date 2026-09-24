@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" fill="none">
+  <defs>
+    <linearGradient id="phantomt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#C06CFF"/><stop offset="1" stop-color="#35104F"/></linearGradient>
+    <linearGradient id="phantoml" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#35104F"/><stop offset="1" stop-color="#0A0D14"/></linearGradient>
+    <linearGradient id="phantomr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C06CFF" stop-opacity=".75"/><stop offset="1" stop-color="#35104F"/></linearGradient>
+    <radialGradient id="phantomg" cx=".5" cy=".55" r=".5"><stop offset="0" stop-color="#C06CFF" stop-opacity=".45"/><stop offset="1" stop-color="#C06CFF" stop-opacity="0"/></radialGradient>
+  </defs>
+  <ellipse cx="100" cy="92" rx="92" ry="60" fill="url(#phantomg)"/>
+  <path d="M100 22 L172 50 L100 78 L28 50 Z" fill="url(#phantomt)"/>
+  <path d="M28 50 L100 78 V146 L28 118 Z" fill="url(#phantoml)"/>
+  <path d="M172 50 L100 78 V146 L172 118 Z" fill="url(#phantomr)"/>
+  <path d="M28 50 L100 78 L172 50" stroke="#fff" stroke-opacity=".35" stroke-width="1.5"/>
+  <path d="M100 78 V146" stroke="#fff" stroke-opacity=".18" stroke-width="1.5"/>
+  <path d="M64 36 L136 64" stroke="#fff" stroke-opacity=".22" stroke-width="6"/>
+  <g transform="translate(36 34) scale(.64)" opacity=".95"><path d="M100 54 Q128 54 128 80 Q128 94 118 98 V110 H82 V98 Q72 94 72 80 Q72 54 100 54 Z M88 78 A6 6 0 1 0 88.1 78 Z M112 78 A6 6 0 1 0 112.1 78 Z" fill="#fff" fill-opacity=".92" fill-rule="evenodd" stroke="#fff" stroke-opacity=".6" stroke-width="2"/></g>
+</svg>
