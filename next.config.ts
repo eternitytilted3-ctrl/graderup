@@ -16,7 +16,14 @@ const csp = [
   "object-src 'none'",
 ].join('; ')
 
+// Hosts allowed to use the DEV server besides localhost: Radmin VPN (26.x / 25.x), typical LAN ranges,
+// plus DEV_ALLOWED_ORIGINS (comma-separated hostnames/IPs, no scheme/port).
+const devOrigins = ['26.*.*.*', '25.*.*.*', '192.168.*.*', '10.*.*.*', '172.*.*.*', ...(process.env.DEV_ALLOWED_ORIGINS ?? '').split(',')]
+  .map((s) => s.trim())
+  .filter(Boolean)
+
 const nextConfig: NextConfig = {
+  allowedDevOrigins: devOrigins,
   poweredByHeader: false,
   reactStrictMode: true,
   images: {
@@ -34,7 +41,7 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
-          ...(isProd ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
+          ...((process.env.APP_URL ?? '').startsWith('https://') ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }] : []),
         ],
       },
       { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'no-store' }] },

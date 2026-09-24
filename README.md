@@ -176,3 +176,17 @@ npm run test:e2e                      # CHROME_PATH=/path/to/chrome при не�
 | KYC/AML | интеграция с KYC-вендором |
 | Email (подтверждение/сброс пароля) | SMTP-провайдер — не реализовано |
 | Юридические тексты | проверка юристом |
+
+## Доступ по локальной сети / Radmin VPN
+
+1. Запустите `npm run dev` (или `npm run dev:lan`). Dev-сервер уже разрешает адреса Radmin (`26.x`, `25.x`) и обычных LAN-сетей; другие хосты добавьте в `DEV_ALLOWED_ORIGINS`.
+2. Откройте порт в брандмауэре (PowerShell **от администратора**):
+   ```powershell
+   New-NetFirewallRule -DisplayName "GraderUP 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow
+   # если раньше закрыли окно-запрос брандмауэра для Node.js — удалите блокирующие правила:
+   Get-NetFirewallRule | Where-Object { $_.DisplayName -like '*Node*' -and $_.Action -eq 'Block' } | Remove-NetFirewallRule
+   ```
+3. Проверка с другого ПК: `Test-NetConnection <ваш-IP> -Port 3000` → `TcpTestSucceeded : True`.
+4. Чтобы работал вход через Steam у всех, укажите `APP_URL=http://<ваш-IP>:3000` и открывайте сайт по этому адресу (не по localhost).
+
+Cookies получают флаг `Secure` только когда `APP_URL` начинается с `https://`, поэтому вход работает и по обычному `http://` в локальной сети.

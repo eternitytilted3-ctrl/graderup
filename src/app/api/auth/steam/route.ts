@@ -5,7 +5,7 @@ import { route } from '@/server/http/handler'
 import { RateLimits } from '@/server/security/rateLimit'
 import { randomToken } from '@/server/security/crypto'
 
-const cookieOpts = { httpOnly: true, sameSite: 'lax' as const, path: '/api/auth/steam', maxAge: 600, secure: process.env.NODE_ENV === 'production' }
+const cookieOpts = { httpOnly: true, sameSite: 'lax' as const, path: '/api/auth/steam', maxAge: 600, secure: (process.env.APP_URL ?? '').startsWith('https://') }
 
 /** Starts Steam OpenID sign-in. Optional ?ref=CODE (referral) and ?next=/path are kept in short-lived cookies. */
 export const GET = route({ rateLimit: RateLimits.login }, async ({ req }) => {

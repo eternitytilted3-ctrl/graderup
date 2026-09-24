@@ -25,7 +25,8 @@ export interface CookieSpec {
 }
 
 function cookieSpecs(token: string, csrf: string, maxAge: number): CookieSpec[] {
-  const secure = env().NODE_ENV === 'production' || env().APP_URL.startsWith('https://')
+  // Secure only over HTTPS: on plain-HTTP LAN / Radmin VPN access the browser would drop Secure cookies.
+  const secure = env().APP_URL.startsWith('https://')
   return [
     { name: SESSION_COOKIE, value: token, options: { httpOnly: true, secure, sameSite: 'lax', path: '/', maxAge } },
     // Readable by JS on purpose: double-submit CSRF token echoed in the X-CSRF-Token header.
