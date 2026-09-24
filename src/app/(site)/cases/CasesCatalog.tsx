@@ -9,10 +9,10 @@ import type { CaseDTO } from '@/lib/types'
 
 const PRICE = [
   { value: 'all', label: 'Все' },
-  { value: 'lt5', label: 'До $5' },
-  { value: '5-25', label: '$5 – $25' },
-  { value: '25-100', label: '$25 – $100' },
-  { value: 'gt100', label: 'От $100' },
+  { value: 'lt5', label: 'До 500 C' },
+  { value: '5-25', label: '500 – 2 500 C' },
+  { value: '25-100', label: '2 500 – 10 000 C' },
+  { value: 'gt100', label: 'От 10 000 C' },
 ] as const
 type PriceFilter = (typeof PRICE)[number]['value']
 
@@ -22,7 +22,7 @@ export function CasesCatalog({ cases }: { cases: CaseDTO[] }) {
   const [sort, setSort] = useState<'price_asc' | 'price_desc' | 'featured'>('featured')
   const list = useMemo(() => {
     const inRange = (p: number) =>
-      price === 'all' || (price === 'lt5' && p < 5) || (price === '5-25' && p >= 5 && p < 25) || (price === '25-100' && p >= 25 && p < 100) || (price === 'gt100' && p >= 100)
+      price === 'all' || (price === 'lt5' && p < 500) || (price === '5-25' && p >= 500 && p < 2500) || (price === '25-100' && p >= 2500 && p < 10000) || (price === 'gt100' && p >= 10000)
     const out = cases.filter((c) => inRange(Number(c.price)) && (!q || c.name.toLowerCase().includes(q.toLowerCase())))
     if (sort === 'price_asc') out.sort((a, b) => Number(a.price) - Number(b.price))
     if (sort === 'price_desc') out.sort((a, b) => Number(b.price) - Number(a.price))

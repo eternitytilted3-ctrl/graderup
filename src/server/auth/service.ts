@@ -17,11 +17,11 @@ export function steamProvider() {
 }
 
 export function enabledProviders() {
-  return { email: true, steam: steamProvider().isEnabled() }
+  return { email: true, emailRegistration: env().EMAIL_REGISTRATION_ENABLED, steam: steamProvider().isEnabled() }
 }
 
 /** Finds or creates the user linked to an external identity. */
-export async function loginWithExternalIdentity(identity: ExternalIdentity) {
+export async function loginWithExternalIdentity(identity: ExternalIdentity, referralCode?: string | null) {
   const db = getDb()
   const [linked] = await db
     .select({ user: users })
@@ -38,9 +38,14 @@ export async function loginWithExternalIdentity(identity: ExternalIdentity) {
     let username = base.length >= 3 ? base : `${base}_user`
     const [taken] = await tx.select({ id: users.id }).from(users).where(sql`lower(${users.username}) = lower(${username})`)
     if (taken) username = `${username.slice(0, 16)}_${randomToken(4).replace(/[^a-zA-Z0-9]/g, '').slice(0, 5)}`
+    let referredBy: string | null = null
+    if (referralCode && /^[A-Z0-9]{3,16}$/i.test(referralCode)) {
+      const [ref] = await tx.select({ id: users.id }).from(users).where(eq(users.referralCode, referralCode.toUpperCase()))
+      referredBy = ref?.id ?? null
+    }
     const [u] = await tx
       .insert(users)
-      .values({ username, email: null, passwordHash: null, avatarUrl: identity.avatarUrl ?? null, referralCode: newReferralCode(), lastLoginAt: new Date() })
+      .values({ username, email: null, passwordHash: null, avatarUrl: identity.avatarUrl ?? null, referralCode: newReferralCode(), referredBy, lastLoginAt: new Date() })
       .returning({ id: users.id })
     await tx.insert(authAccounts).values({ userId: u.id, provider: identity.provider, providerUserId: identity.providerUserId, profile: identity.profile ?? null })
     return { userId: u.id, created: true }

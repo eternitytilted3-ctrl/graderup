@@ -28,6 +28,12 @@ npm run db:seed                 # 12 кейсов, 64 предмета, demo-п�
 npm run dev                     # http://localhost:3000
 ```
 
+Сид скачивает **реальные скины CS2** (~9 000 шт.: названия, редкости, картинки со Steam CDN) из открытой базы [ByMykel/CSGO-API](https://github.com/ByMykel/CSGO-API) и цены Skinport в рублях. Без интернета используются сгенерированные демо-предметы (`SEED_REAL_SKINS=false` — принудительно).
+
+**Валюта сайта — коины `C`**: 1 C = 1 ₽ пополнения. Все суммы в БД хранятся в коинах.
+
+**Вход — через Steam** (OpenID, ключ не нужен; `STEAM_API_KEY` добавляет ник и аватар). Регистрация по email отключена (`EMAIL_REGISTRATION_ENABLED=false`); вход по email остаётся для администраторов — ссылка «Вход по email» на странице авторизации.
+
 Учётные записи после сида:
 
 | Роль | Логин | Пароль |
@@ -72,6 +78,7 @@ npm run dev                     # http://localhost:3000
 | `npm run admin:create -- --email a@b.c --username boss --password 'Str0ngPass'` | создать superadmin |
 | `npm run admin:create -- --promote username` | повысить существующего пользователя |
 | `npm run prices:sync` (`-- --dry-run`) | синхронизировать цены предметов с маркетом |
+| `npm run skins:import` (`-- --rebuild-cases`) | обновить каталог скинов CS2 и цены (и пересобрать кейсы) |
 | `npm run assets:generate` | перегенерировать оригинальные SVG-ассеты |
 | `npm run lint` / `npm run typecheck` | ESLint / TypeScript |
 | `npm test` | unit + интеграционные тесты (нужна `TEST_DATABASE_URL`, **БД очищается**) |
@@ -110,6 +117,10 @@ src/
 ### Безопасность (кратко)
 
 SQLi — параметризованные запросы Drizzle; XSS — React-экранирование + CSP; CSRF — `SameSite=Lax` + проверка Origin + double-submit токен; IDOR — все запросы фильтруются по `session.userId`; rate limit в Postgres (работает на нескольких инстансах); brute force — лимиты по IP и аккаунту + временная блокировка после 5 ошибок; цены/шансы/результаты с клиента не принимаются; ошибки отдаются как `{error:{code,message}}` без stack trace; admin API — проверка роли + `admin_logs` в той же транзакции.
+
+### Анимации и звуки
+
+Рулетка и шкала апгрейда анимируются через Web Animations API (работают и при включённом «уменьшении движения» в ОС), картинки ленты предзагружаются до старта. Звуки синтезируются Web Audio API (без аудиофайлов), переключатель звука — на странице кейса и апгрейда. Кнопки апгрейда ×2 / ×5 / ×10 / 30% / 50% / 75% подбирают цель на сервере (`GET /api/upgrade/auto-target`).
 
 ### CS2-скины и рыночные цены
 

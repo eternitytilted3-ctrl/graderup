@@ -190,10 +190,10 @@ export default async function HomePage() {
       <section className="pt-16">
         <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-primary/30 bg-[linear-gradient(120deg,rgb(124_92_255/0.18),rgb(0_212_255/0.08))] px-6 py-10 text-center sm:px-10">
           <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Готовы к первому дропу?</h2>
-          <p className="mx-auto mt-3 max-w-md text-sm text-muted sm:text-[15px]">Кейсы от {formatMoney(cases[0]?.price ?? '0.49')}. Регистрация занимает меньше минуты.</p>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted sm:text-[15px]">Кейсы от {formatMoney(cases[0]?.price ?? '0.49')}. Вход через Steam — в один клик.</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link href="/register">
-              <Button size="lg">Создать аккаунт</Button>
+            <Link href="/login">
+              <Button size="lg">Войти через Steam</Button>
             </Link>
             <Link href="/cases">
               <Button size="lg" variant="secondary">

@@ -1,10 +1,12 @@
 import 'dotenv/config'
 process.env.LOG_CONSOLE = 'false'
-import { count, eq } from 'drizzle-orm'
+import { asc, count, eq } from 'drizzle-orm'
 import { hashPassword } from '../src/server/auth/password'
 import { newReferralCode } from '../src/server/auth/providers/EmailAuthProvider'
 import { closeDb, getDb } from '../src/server/db/client'
-import { caseItems, cases, items, promocodes, rewards, settings, users, type Rarity } from '../src/server/db/schema'
+import { buildCases } from '../src/server/catalog/cases'
+import { importCs2Catalog } from '../src/server/catalog/cs2'
+import { cases, items, promocodes, rewards, settings, users, type Rarity } from '../src/server/db/schema'
 import { getMockProvider, mockAllowed } from '../src/server/payments'
 import { adjustBalance } from '../src/server/services/admin'
 import { openCase } from '../src/server/services/cases'
@@ -21,12 +23,12 @@ const between = (a: number, b: number) => a + (b - a) * rand()
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 const RANGES: Record<Rarity, [number, number]> = {
-  common: [0.05, 0.6],
-  uncommon: [0.6, 3],
-  rare: [3, 15],
-  epic: [15, 60],
-  legendary: [60, 400],
-  mythic: [400, 2500],
+  common: [4, 50],
+  uncommon: [50, 250],
+  rare: [250, 1200],
+  epic: [1200, 5000],
+  legendary: [5000, 35000],
+  mythic: [35000, 200000],
 }
 
 // Generic weapon designations + ORIGINAL finish names (no third-party skin names/art).
@@ -100,40 +102,6 @@ const FINISHES: Record<Rarity, string[]> = {
   mythic: ['Singularity', 'Prismatic', 'Void Heart'],
 }
 
-const CASES: { slug: string; name: string; price: number; description: string; featured?: boolean }[] = [
-  { slug: 'starter', name: 'Starter', price: 0.49, description: 'Лёгкий старт: недорогие предметы и шанс на редкость.', featured: true },
-  { slug: 'neon-rush', name: 'Neon Rush', price: 1.99, description: 'Яркие неоновые расцветки и быстрые апгрейды.', featured: true },
-  { slug: 'emerald', name: 'Emerald', price: 2.99, description: 'Спокойная зелёная коллекция с сюрпризами.' },
-  { slug: 'night-ops', name: 'Night Ops', price: 4.49, description: 'Тёмные тактические предметы для ночных операций.' },
-  { slug: 'violet-core', name: 'Violet Core', price: 6.99, description: 'Фирменный фиолетовый кейс GraderUP.', featured: true },
-  { slug: 'arctic', name: 'Arctic', price: 9.99, description: 'Ледяные расцветки и морозные эффекты.' },
-  { slug: 'ember', name: 'Ember', price: 14.99, description: 'Огненная коллекция с высоким потенциалом.' },
-  { slug: 'lunar', name: 'Lunar', price: 24.99, description: 'Лунная серия для терпеливых охотников.' },
-  { slug: 'phantom', name: 'Phantom', price: 39.99, description: 'Призрачные предметы редких расцветок.', featured: true },
-  { slug: 'prism', name: 'Prism', price: 59.99, description: 'Переливающиеся предметы всех оттенков.' },
-  { slug: 'royal', name: 'Royal', price: 99.99, description: 'Золото и легендарные предметы.', featured: true },
-  { slug: 'quantum', name: 'Quantum', price: 199.99, description: 'Максимальные ставки — мифические предметы.' },
-]
-
-/** Weights ∝ price^-k, with k chosen by binary search so that EV ≈ price × rtp. */
-function weightsFor(prices: number[], casePrice: number, rtp: number) {
-  const ev = (k: number) => {
-    const w = prices.map((p) => Math.pow(p, -k))
-    const sum = w.reduce((a, b) => a + b, 0)
-    return prices.reduce((acc, p, i) => acc + (p * w[i]) / sum, 0)
-  }
-  let lo = 0
-  let hi = 6
-  for (let i = 0; i < 60; i++) {
-    const mid = (lo + hi) / 2
-    if (ev(mid) > casePrice * rtp) lo = mid
-    else hi = mid
-  }
-  const w = prices.map((p) => Math.pow(p, -lo))
-  const sum = w.reduce((a, b) => a + b, 0)
-  return w.map((x) => Math.max(1, Math.round((x / sum) * 1_000_000)))
-}
-
 async function main() {
   const db = getDb()
   const [{ n }] = await db.select({ n: count() }).from(cases)
@@ -148,75 +116,53 @@ async function main() {
     await db.insert(settings).values({ key, value }).onConflictDoNothing()
   }
 
-  // ── Items ──
-  const itemRows: (typeof items.$inferSelect)[] = []
-  const usedNames = new Set<string>()
-  for (const rarity of Object.keys(RANGES) as Rarity[]) {
-    const [lo, hi] = RANGES[rarity]
-    const perRarity = { common: 14, uncommon: 13, rare: 12, epic: 11, legendary: 8, mythic: 6 }[rarity]
-    for (let i = 0; i < perRarity; i++) {
-      const a = POOLS[rarity][i % POOLS[rarity].length]
-      const finish = FINISHES[rarity][i % FINISHES[rarity].length]
-      const isWeapon = !['sticker', 'charm', 'grenade'].includes(a.art)
-      let wear = isWeapon ? ` (${WEARS[(i + rarity.length) % WEARS.length]})` : ''
-      for (let w = 1; usedNames.has(`${a.name} | ${finish}${wear}`) && w <= WEARS.length; w++) wear = ` (${WEARS[(i + rarity.length + w) % WEARS.length]})`
-      if (usedNames.has(`${a.name} | ${finish}${wear}`)) continue
-      usedNames.add(`${a.name} | ${finish}${wear}`)
-      const price = round2(Math.exp(between(Math.log(lo), Math.log(hi))))
-      const [row] = await db
-        .insert(items)
-        .values({ name: `${a.name} | ${finish}${wear}`, marketHashName: `${a.name} | ${finish}${wear}`, image: `/assets/items/${a.art}.svg`, price: price.toFixed(2), rarity, description: DESCRIPTIONS[a.art] ?? '' })
-        .returning()
-      if (row) itemRows.push(row)
+  // ── Items: real CS2 skins (ByMykel catalogue + Skinport RUB prices), or offline fallback ──
+  let realSkins = false
+  if (process.env.SEED_REAL_SKINS !== 'false') {
+    try {
+      await importCs2Catalog({ log: (m) => console.log(`  · ${m}`) })
+      realSkins = true
+    } catch (err) {
+      console.log(`  · CS2 catalogue unavailable (${(err as Error).message}) — using generated demo items`)
     }
   }
-  console.log(`✓ ${itemRows.length} items`)
+  if (!realSkins) {
+    const usedNames = new Set<string>()
+    for (const rarity of Object.keys(RANGES) as Rarity[]) {
+      const [lo, hi] = RANGES[rarity]
+      const perRarity = { common: 14, uncommon: 13, rare: 12, epic: 11, legendary: 8, mythic: 6 }[rarity]
+      for (let i = 0; i < perRarity; i++) {
+        const a = POOLS[rarity][i % POOLS[rarity].length]
+        const finish = FINISHES[rarity][i % FINISHES[rarity].length]
+        const isWeapon = !['sticker', 'charm', 'grenade'].includes(a.art)
+        let wear = isWeapon ? ` (${WEARS[(i + rarity.length) % WEARS.length]})` : ''
+        for (let w = 1; usedNames.has(`${a.name} | ${finish}${wear}`) && w <= WEARS.length; w++) wear = ` (${WEARS[(i + rarity.length + w) % WEARS.length]})`
+        if (usedNames.has(`${a.name} | ${finish}${wear}`)) continue
+        usedNames.add(`${a.name} | ${finish}${wear}`)
+        const price = round2(Math.exp(between(Math.log(lo), Math.log(hi))))
+        await db.insert(items).values({ name: `${a.name} | ${finish}${wear}`, image: `/assets/items/${a.art}.svg`, price: price.toFixed(2), rarity, description: DESCRIPTIONS[a.art] ?? '' })
+      }
+    }
+  }
+  const [{ n: itemCount }] = await db.select({ n: count() }).from(items)
+  console.log(`✓ ${itemCount} items${realSkins ? ' (CS2)' : ''}`)
 
   // ── Cases ──
-  const sorted = [...itemRows].sort((a, b) => Number(a.price) - Number(b.price))
-  for (const [idx, c] of CASES.entries()) {
-    const pool = sorted.filter((i) => Number(i.price) >= c.price * 0.04 && Number(i.price) <= c.price * 40)
-    // Spread ~12 items evenly across the pool's price range.
-    const pick: typeof pool = []
-    const want = Math.min(12, pool.length)
-    for (let i = 0; i < want; i++) pick.push(pool[Math.round((i * (pool.length - 1)) / Math.max(1, want - 1))])
-    const unique = [...new Map(pick.map((p) => [p.id, p])).values()]
-    const weights = weightsFor(
-      unique.map((u) => Number(u.price)),
-      c.price,
-      0.9,
-    )
-    const total = weights.reduce((a, b) => a + b, 0)
-    const [row] = await db
-      .insert(cases)
-      .values({
-        name: c.name,
-        slug: c.slug,
-        description: c.description,
-        image: `/assets/cases/${c.slug}.svg`,
-        price: c.price.toFixed(2),
-        sortOrder: idx,
-        isFeatured: c.featured ?? false,
-      })
-      .returning()
-    await db.insert(caseItems).values(
-      unique.map((u, i) => ({ caseId: row.id, itemId: u.id, dropWeight: weights[i], dropChance: ((weights[i] / total) * 100).toFixed(5) })),
-    )
-  }
-  console.log(`✓ ${CASES.length} cases`)
+  const built = await buildCases()
+  console.log(`✓ ${built.cases} cases`)
 
   // ── Rewards & promocodes ──
   await db.insert(rewards).values([
-    { type: 'daily', title: 'Ежедневная награда', description: 'Заходите каждый день и забирайте бонус на баланс.', amount: '0.10', cooldownSeconds: 86400, minDepositTotal: '0' },
-    { type: 'weekly', title: 'Еженедельная награда', description: 'Большой бонус раз в неделю для активных игроков.', amount: '1.00', cooldownSeconds: 604800, minDepositTotal: '10' },
-    { type: 'referral', title: 'Реферальная награда', description: 'Бонус за каждого приглашённого друга, который пополнил баланс.', amount: '0.50', cooldownSeconds: 0, minDepositTotal: '0' },
+    { type: 'daily', title: 'Ежедневная награда', description: 'Заходите каждый день и забирайте бонус на баланс.', amount: '10', cooldownSeconds: 86400, minDepositTotal: '0' },
+    { type: 'weekly', title: 'Еженедельная награда', description: 'Большой бонус раз в неделю для активных игроков.', amount: '100', cooldownSeconds: 604800, minDepositTotal: '1000' },
+    { type: 'referral', title: 'Реферальная награда', description: 'Бонус за каждого приглашённого друга, который пополнил баланс.', amount: '50', cooldownSeconds: 0, minDepositTotal: '0' },
   ])
-  const giftItem = sorted.find((i) => i.rarity === 'rare')!
+  const [giftItem] = await db.select().from(items).where(eq(items.rarity, 'rare')).orderBy(asc(items.price)).limit(1)
   await db.insert(promocodes).values([
-    { code: 'WELCOME', type: 'fixed', value: '1.00', maxUses: 10000 },
+    { code: 'WELCOME', type: 'fixed', value: '100', maxUses: 10000 },
     { code: 'BOOST10', type: 'percentage', value: '10.00', maxUses: 5000 },
     { code: 'GIFTDROP', type: 'item', value: '0', itemId: giftItem.id, maxUses: 500 },
-    { code: 'SUMMER25', type: 'fixed', value: '2.00', maxUses: 100, expiresAt: new Date('2025-09-01T00:00:00Z') },
+    { code: 'SUMMER25', type: 'fixed', value: '200', maxUses: 100, expiresAt: new Date('2025-09-01T00:00:00Z') },
   ])
   console.log('✓ rewards & promocodes')
 
@@ -262,7 +208,7 @@ async function main() {
   }
   const caseSlugs = ['starter', 'neon-rush', 'emerald', 'night-ops', 'violet-core']
   for (const [i, u] of demo.entries()) {
-    await deposit(u.id, [150, 80, 60, 50][i])
+    await deposit(u.id, [15000, 8000, 6000, 5000][i])
     for (let k = 0; k < 10 + i * 2; k++) {
       const ok = await openCase(u.id, caseSlugs[(k + i) % caseSlugs.length]).then(() => true, () => false)
       if (!ok) break

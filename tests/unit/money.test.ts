@@ -7,7 +7,9 @@ describe('money', () => {
   it('uses decimal arithmetic (no float drift)', () => {
     expect(toMoney('0.1').toString()).toBe('0.10')
     expect(toMoney(0.1 + 0.2)).toBe('0.30')
-    expect(formatMoney('1234567.5')).toBe('$1 234 567.50')
+    expect(formatMoney('1234567.5')).toBe('1\u202f234\u202f567.50\u00a0C')
+    expect(formatMoney('49')).toBe('49\u00a0C')
+    expect(formatMoney('-5')).toBe('\u22125\u00a0C')
   })
 })
 

@@ -157,3 +157,33 @@ export async function getUpgradeConfigPublic() {
   const cfg = await getSetting('upgrade')
   return { minMultiplier: cfg.minMultiplier, maxMultiplier: cfg.maxMultiplier, minChance: cfg.minChance, maxChance: cfg.maxChance }
 }
+
+export type AutoTargetMode = 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75'
+
+/**
+ * Picks the active item whose price is closest to the desired target:
+ * xN → source × N; cP → price that yields ≈P% chance with the current formula.
+ */
+export async function autoTarget(userId: string, userItemId: string, mode: AutoTargetMode) {
+  const cfg = await getSetting('upgrade')
+  const db = getDb()
+  const [src] = await db
+    .select({ ui: userItems, item: items })
+    .from(userItems)
+    .innerJoin(items, eq(items.id, userItems.itemId))
+    .where(and(eq(userItems.id, userItemId), eq(userItems.userId, userId), eq(userItems.status, 'available')))
+  if (!src) throw Errors.notFound('Предмет не найден в инвентаре')
+  const s = D(src.item.price)
+  const desired = mode.startsWith('x') ? s.mul(Number(mode.slice(1))) : s.mul(1 - cfg.houseEdge).mul(100).div(Number(mode.slice(1)))
+  const min = s.mul(cfg.minMultiplier)
+  const max = s.mul(cfg.maxMultiplier)
+  const clamped = desired.lt(min) ? min : desired.gt(max) ? max : desired
+  const [row] = await db
+    .select()
+    .from(items)
+    .where(and(eq(items.isActive, true), sql`${items.price} >= ${min.toFixed(2)}`, sql`${items.price} <= ${max.toFixed(2)}`))
+    .orderBy(sql`abs(${items.price} - ${clamped.toFixed(2)})`, asc(items.price))
+    .limit(1)
+  if (!row) throw Errors.notFound('Не найдено подходящей цели для этого предмета')
+  return toItemDTO(row)
+}

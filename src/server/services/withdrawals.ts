@@ -20,7 +20,7 @@ export async function requestWithdrawal(userId: string, input: { amount: number;
   const cfg = await withdrawConfig()
   if (!cfg.enabled) throw Errors.disabled('Вывод средств сейчас недоступен')
   const amount = toMoney(input.amount)
-  if (D(amount).lt(cfg.minAmount) || D(amount).gt(cfg.maxAmount)) throw Errors.badRequest(`Сумма вывода: от $${cfg.minAmount} до $${cfg.maxAmount}`)
+  if (D(amount).lt(cfg.minAmount) || D(amount).gt(cfg.maxAmount)) throw Errors.badRequest(`Сумма вывода: от ${cfg.minAmount} до ${cfg.maxAmount} C`)
   if (!cfg.methods.includes(input.method)) throw Errors.badRequest('Неподдерживаемый способ вывода')
 
   const out = await getDb().transaction(async (tx) => {

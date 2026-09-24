@@ -22,11 +22,13 @@ export const GET = route({ rateLimit: RateLimits.login }, async ({ req, ip }) =>
   if (!state || !safeEqual(state, expected)) return fail('state')
   try {
     const identity = await provider.handleCallback(req.nextUrl)
-    const { userId, created } = await loginWithExternalIdentity(identity)
+    const { userId, created } = await loginWithExternalIdentity(identity, req.cookies.get('gu_ref')?.value)
     const session = await createSession(userId, { ip, userAgent: userAgent(req) })
     void logEvent(created ? 'register' : 'login', { userId, ip, details: { provider: 'steam' } })
-    const res = NextResponse.redirect(`${appUrl}/`)
-    res.cookies.delete('gu_oauth_state')
+    const next = req.cookies.get('gu_next')?.value
+    const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
+    const res = NextResponse.redirect(`${appUrl}${safeNext}`)
+    for (const c of ['gu_oauth_state', 'gu_ref', 'gu_next']) res.cookies.set(c, '', { path: '/api/auth/steam', maxAge: 0 })
     return applyCookies(res, session.cookies)
   } catch (err) {
     return fail((err as Error).message.slice(0, 120))

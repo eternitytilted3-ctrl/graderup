@@ -113,12 +113,12 @@ describe('rewards & promocodes', () => {
 describe('payments', () => {
   it('replayed webhook credits once; forged signature rejected', async () => {
     const u = await createUser()
-    const p = await createPayment(u.id, 25)
+    const p = await createPayment(u.id, 2500)
     const hook = getMockProvider().buildWebhook({ externalId: `mock_${p.id}`, paymentId: p.id, status: 'completed', amount: p.amount, currency: p.currency })
     const headers = new Headers({ 'x-mock-signature': hook.signature })
     await settle(Array.from({ length: 5 }, () => handleWebhook('mock', hook.body, headers)))
-    expect(await balanceOf(u.id)).toBe('25.00')
-    await expect(handleWebhook('mock', hook.body.replace('25.00', '2500.00'), headers)).rejects.toMatchObject({ status: 403 })
+    expect(await balanceOf(u.id)).toBe('2500.00')
+    await expect(handleWebhook('mock', hook.body.replace('2500.00', '250000.00'), headers)).rejects.toMatchObject({ status: 403 })
     const [row] = await getDb().select().from(payments).where(eq(payments.id, p.id))
     expect(row.status).toBe('completed')
     expect(await ledgerConsistent(u.id)).toBe(true)

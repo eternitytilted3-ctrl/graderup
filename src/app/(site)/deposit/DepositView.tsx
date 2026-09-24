@@ -77,7 +77,7 @@ export function DepositView({ config, payments, bonusPercent, mock }: { config: 
       <PageHeader title="Пополнение баланса" description="Баланс зачисляется только после подтверждения платежа платёжным провайдером." />
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <section className="card p-5 sm:p-6">
-          <div className="label mb-3">Сумма, {config.currency}</div>
+          <div className="label mb-3">Сумма пополнения, C (1 C = 1 ₽)</div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {config.presets.map((p) => (
               <button
@@ -85,7 +85,7 @@ export function DepositView({ config, payments, bonusPercent, mock }: { config: 
                 onClick={() => setAmount(String(p))}
                 className={cn('h-12 rounded-md border font-display font-bold tnum transition', Number(amount) === p ? 'border-primary bg-primary/15' : 'border-border hover:border-border-strong')}
               >
-                ${p}
+                {p} C
               </button>
             ))}
           </div>

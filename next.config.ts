@@ -20,11 +20,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   images: {
-    // Item/case art is SVG authored in this repo (public/assets).
-    dangerouslyAllowSVG: true,
-    contentDispositionType: 'attachment',
-    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    remotePatterns: [{ protocol: 'https', hostname: '**' }],
+    // Local art is SVG; CS2 skin images come pre-sized from Steam's CDN (…/360fx360f),
+    // so server-side optimisation would only add latency and outbound traffic.
+    unoptimized: true,
   },
   async headers() {
     return [

@@ -59,14 +59,14 @@ export default function AdminRewards() {
               <textarea name="description" className="input h-16 py-2" defaultValue={r.description} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Сумма, $">
+              <Field label="Сумма, C">
                 <input name="amount" type="number" step="0.01" min="0" className="input h-10" defaultValue={r.amount} />
               </Field>
               <Field label="Период, сек">
                 <input name="cooldownSeconds" type="number" min="0" className="input h-10" defaultValue={r.cooldownSeconds} disabled={r.type === 'referral'} />
               </Field>
             </div>
-            <Field label="Мин. сумма депозитов, $" hint="Анти-абуз мультиаккаунтов">
+            <Field label="Мин. сумма депозитов, C" hint="Анти-абуз мультиаккаунтов">
               <input name="minDepositTotal" type="number" step="0.01" min="0" className="input h-10" defaultValue={r.minDepositTotal} />
             </Field>
             <label className="flex items-center gap-2 text-sm text-muted">

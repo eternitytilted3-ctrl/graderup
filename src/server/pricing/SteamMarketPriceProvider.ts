@@ -7,7 +7,7 @@ import type { MarketPrice, PriceProvider } from './PriceProvider'
 export class SteamMarketPriceProvider implements PriceProvider {
   readonly id = 'steam'
   constructor(
-    private readonly currencyCode = 1 /* USD */,
+    private readonly currencyCode = 5 /* RUB */,
     private readonly delayMs = 3500,
   ) {}
 
@@ -21,7 +21,7 @@ export class SteamMarketPriceProvider implements PriceProvider {
           const d = (await res.json()) as { success: boolean; lowest_price?: string; median_price?: string }
           const raw = d.median_price ?? d.lowest_price
           const num = raw ? Number(raw.replace(/[^\d.,]/g, '').replace(',', '.')) : NaN
-          if (d.success && num > 0) out.set(name, { marketHashName: name, price: num.toFixed(2), currency: 'USD' })
+          if (d.success && num > 0) out.set(name, { marketHashName: name, price: num.toFixed(2), currency: 'RUB' })
         }
       } catch {
         // skip item on error; next sync will retry

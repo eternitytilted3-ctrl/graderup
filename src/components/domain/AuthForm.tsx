@@ -40,7 +40,7 @@ function safeNext(next: string | null) {
   return next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
 }
 
-export function AuthForm({ mode, steamEnabled }: { mode: 'login' | 'register'; steamEnabled: boolean }) {
+export function AuthForm({ mode, steamEnabled, embedded = false, showRegisterLink = true }: { mode: 'login' | 'register'; steamEnabled: boolean; embedded?: boolean; showRegisterLink?: boolean }) {
   const router = useRouter()
   const params = useSearchParams()
   const { refresh } = useSession()
@@ -82,9 +82,9 @@ export function AuthForm({ mode, steamEnabled }: { mode: 'login' | 'register'; s
   }
 
   return (
-    <div className="mx-auto w-full max-w-md py-10 sm:py-16">
+    <div className={embedded ? 'w-full py-8' : 'mx-auto w-full max-w-md py-10 sm:py-16'}>
       <div className="card p-6 sm:p-8">
-        <h1 className="font-display text-2xl font-bold tracking-tight">{mode === 'login' ? 'Вход в аккаунт' : 'Создание аккаунта'}</h1>
+        <h1 className="h-tactical text-2xl">{mode === 'login' ? (embedded ? 'Вход по email' : 'Вход в аккаунт') : 'Создание аккаунта'}</h1>
         <p className="mt-1.5 text-sm text-muted">{mode === 'login' ? 'Рады видеть вас снова.' : 'Регистрация займёт меньше минуты.'}</p>
         {formError && (
           <div role="alert" className="mt-5 rounded-md border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger">
@@ -140,7 +140,7 @@ export function AuthForm({ mode, steamEnabled }: { mode: 'login' | 'register'; s
             </a>
           </>
         )}
-        <p className="mt-6 text-center text-sm text-muted">
+        {(mode === 'register' || showRegisterLink) && <p className="mt-6 text-center text-sm text-muted">
           {mode === 'login' ? (
             <>
               Нет аккаунта?{' '}
@@ -156,7 +156,7 @@ export function AuthForm({ mode, steamEnabled }: { mode: 'login' | 'register'; s
               </Link>
             </>
           )}
-        </p>
+        </p>}
       </div>
     </div>
   )

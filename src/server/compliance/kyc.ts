@@ -31,7 +31,7 @@ export function getKycProvider(): KycProvider {
 export function assertWithdrawalAllowed(user: Pick<SessionUser, 'kycStatus'>, amount: string) {
   const threshold = env().KYC_WITHDRAW_THRESHOLD
   if (threshold > 0 && D(amount).gt(threshold) && user.kycStatus !== 'verified') {
-    throw new AppError(403, 'KYC_REQUIRED', `Для вывода суммы больше $${threshold} требуется верификация личности (KYC)`)
+    throw new AppError(403, 'KYC_REQUIRED', `Для вывода суммы больше ${threshold} C требуется верификация личности (KYC)`)
   }
 }
 

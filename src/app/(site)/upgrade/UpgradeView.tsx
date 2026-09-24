@@ -3,11 +3,13 @@
 import { ArrowDown, ArrowRight, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ItemCard } from '@/components/domain/ItemCard'
 import { PageHeader } from '@/components/domain/PageHeader'
 import { UpgradeCard } from '@/components/domain/UpgradeCard'
-import { UpgradeDial, type DialState } from '@/components/domain/UpgradeDial'
+import { UpgradeDial, type DialState, type UpgradeDialHandle } from '@/components/domain/UpgradeDial'
+import { SoundToggle } from '@/components/ui/SoundToggle'
+import { sfx } from '@/lib/sound'
 import { Button } from '@/components/ui/Button'
 import { Pagination } from '@/components/ui/Pagination'
 import { Search } from '@/components/ui/Search'
@@ -32,7 +34,9 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   const [target, setTarget] = useState<ItemDTO | null>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
   const [state, setState] = useState<DialState>('idle')
-  const [result, setResult] = useState<UpgradeResultDTO | null>(null)
+  const [, setResult] = useState<UpgradeResultDTO | null>(null)
+  const dial = useRef<UpgradeDialHandle>(null)
+  const [autoMode, setAutoMode] = useState<string | null>(null)
   const [invPage, setInvPage] = useState(1)
   const [tPage, setTPage] = useState(1)
   const [tSearch, setTSearch] = useState('')
@@ -76,21 +80,46 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   async function run() {
     if (!source || !target || spinning) return
     setResult(null)
-    setState('idle')
+    dial.current?.reset()
+    setState('spinning')
     try {
+      // The server decides the outcome first; the dial only visualizes the returned roll.
       const r = await api<UpgradeResultDTO>('/api/upgrade', { body: { userItemId: source.id, targetItemId: target.id } })
       setResult(r)
-      requestAnimationFrame(() => setState('spinning'))
-      setTimeout(() => {
-        setState(r.result)
-        if (r.result === 'win') toast.success('Апгрейд успешен!', `${r.target.name} добавлен в инвентарь`)
-        else toast.error('Апгрейд не удался', `${r.source.name} сгорел`)
-        inv.reload()
-      }, 3900)
+      await dial.current?.spin(r.rollFraction)
+      setState(r.result)
+      if (r.result === 'win') {
+        sfx.success()
+        toast.success('Апгрейд успешен!', `${r.target.name} добавлен в инвентарь`)
+      } else {
+        sfx.fail()
+        toast.error('Апгрейд не удался', `${r.source.name} сгорел`)
+      }
+      inv.reload()
     } catch (err) {
       setState('idle')
       toast.error('Апгрейд не выполнен', (err as ApiError).message)
       inv.reload()
+    }
+  }
+
+  async function quick(mode: 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75') {
+    if (!source || spinning) {
+      if (!source) toast.info('Сначала выберите свой предмет')
+      return
+    }
+    setAutoMode(mode)
+    try {
+      const item = await api<ItemDTO>(`/api/upgrade/auto-target${qs({ userItemId: source.id, mode })}`)
+      sfx.click()
+      setTarget(item)
+      setState('idle')
+      dial.current?.reset()
+      setResult(null)
+    } catch (err) {
+      toast.error('Не удалось подобрать цель', (err as ApiError).message)
+    } finally {
+      setAutoMode(null)
     }
   }
 
@@ -99,6 +128,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
     setTarget(null)
     setResult(null)
     setState('idle')
+    dial.current?.reset()
   }
 
   const done = state === 'win' || state === 'loss'
@@ -106,14 +136,19 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
 
   return (
     <div className="container-page">
-      <PageHeader eyebrow="Upgrade" title="Апгрейд предмета" description={`Выберите предмет и цель дороже минимум в ${config.minMultiplier}×. Чем выше множитель — тем ниже шанс.`} />
+      <PageHeader
+        eyebrow="Upgrade"
+        title="Апгрейд предмета"
+        description={`Выберите предмет и цель дороже минимум в ${config.minMultiplier}×. Чем выше множитель — тем ниже шанс.`}
+        actions={<SoundToggle />}
+      />
 
       <section id="upgrade-panel" className="card grid scroll-mt-20 items-stretch gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8" aria-label="Апгрейд">
         <UpgradeCard label="Ваш предмет" item={source?.item ?? null} placeholder="Выберите предмет из инвентаря ниже" onClear={spinning ? undefined : () => { setSource(null); setState('idle') }} highlight={state === 'loss' ? 'loss' : null} />
         <div className="flex flex-col items-center justify-center gap-4 py-2">
           <ArrowRight className="hidden size-5 text-subtle lg:block" />
           <ArrowDown className="size-5 text-subtle lg:hidden" />
-          <UpgradeDial chance={chanceNum} state={state} rollFraction={result?.rollFraction ?? null} />
+          <UpgradeDial ref={dial} chance={chanceNum} state={state} />
           <dl className="grid w-full max-w-[280px] grid-cols-2 gap-2 text-center text-xs">
             <div className="rounded-md border border-border bg-bg px-2 py-2">
               <dt className="text-muted">Выигрыш</dt>
@@ -142,6 +177,29 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
         </div>
         <UpgradeCard label="Цель" item={target} placeholder="Выберите целевой предмет из списка" onClear={spinning ? undefined : () => { setTarget(null); setState('idle') }} highlight={state === 'win' ? 'win' : null} />
       </section>
+
+      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6" role="group" aria-label="Быстрый выбор цели">
+        {(
+          [
+            ['x2', '×2'],
+            ['x5', '×5'],
+            ['x10', '×10'],
+            ['c30', '30%'],
+            ['c50', '50%'],
+            ['c75', '75%'],
+          ] as const
+        ).map(([mode, label]) => (
+          <button
+            key={mode}
+            onClick={() => quick(mode)}
+            disabled={spinning || autoMode !== null}
+            data-testid={`quick-${mode}`}
+            className="h-11 rounded-[var(--radius-md)] border border-border bg-card font-display text-base font-semibold tracking-wide transition hover:border-accent/60 hover:bg-accent/10 hover:text-accent disabled:opacity-50"
+          >
+            {autoMode === mode ? '…' : label}
+          </button>
+        ))}
+      </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <section aria-label="Инвентарь для апгрейда">

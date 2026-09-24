@@ -7,7 +7,7 @@ import type { MarketPrice, PriceProvider } from './PriceProvider'
 export class SkinportPriceProvider implements PriceProvider {
   readonly id = 'skinport'
   constructor(
-    private readonly currency = 'USD',
+    private readonly currency = 'RUB',
     private readonly field: 'suggested_price' | 'min_price' | 'median_price' = 'suggested_price',
   ) {}
 

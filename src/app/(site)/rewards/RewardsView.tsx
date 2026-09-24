@@ -88,7 +88,7 @@ export function RewardsView() {
     }
   }
 
-  const refLink = typeof window !== 'undefined' && data ? `${window.location.origin}/register?ref=${data.referralCode}` : ''
+  const refLink = typeof window !== 'undefined' && data ? `${window.location.origin}/login?ref=${data.referralCode}` : ''
 
   return (
     <div className="container-page">

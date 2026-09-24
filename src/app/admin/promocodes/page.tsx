@@ -97,7 +97,7 @@ export default function AdminPromocodes() {
               <input name="itemId" className="input h-10 font-mono text-xs" defaultValue={cur?.itemId ?? ''} required />
             </Field>
           ) : (
-            <Field label={type === 'fixed' ? 'Сумма, $' : 'Процент'} error={errs.value}>
+            <Field label={type === 'fixed' ? 'Сумма, C' : 'Процент'} error={errs.value}>
               <input name="value" type="number" step="0.01" min="0.01" className="input h-10" defaultValue={cur?.value} required />
             </Field>
           )}

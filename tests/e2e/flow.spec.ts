@@ -1,26 +1,48 @@
 import { expect, test } from '@playwright/test'
 
-const uname = `e2e_${Date.now().toString(36)}`
-const password = 'E2eTest12345'
+async function emailLogin(page: import('@playwright/test').Page, login: string, password: string) {
+  await page.goto('/login')
+  await page.getByRole('button', { name: /Вход по email/ }).click()
+  await page.fill('input[name=login]', login)
+  await page.fill('input[name=password]', password)
+  await page.click('button[type=submit]')
+}
+
+test('auth page: Steam is the primary sign-in, public email sign-up is disabled', async ({ page, request }) => {
+  await page.goto('/')
+  await page.getByRole('link', { name: /Авторизация/ }).first().click()
+  await expect(page.getByRole('heading', { name: 'Авторизация' })).toBeVisible()
+  await expect(page.getByTestId('steam-login')).toBeVisible()
+  await page.goto('/register')
+  await expect(page).toHaveURL(/\/login/)
+  // Server builds a Steam OpenID 2.0 request with our realm/return URL.
+  const r = await request.get('/api/auth/steam?ref=ABC123', { maxRedirects: 0 })
+  expect(r.status()).toBe(307)
+  const loc = new URL(r.headers()['location'])
+  expect(loc.origin).toBe('https://steamcommunity.com')
+  expect(loc.searchParams.get('openid.mode')).toBe('checkid_setup')
+  expect(loc.searchParams.get('openid.return_to')).toContain('/api/auth/steam/callback?state=')
+  // A forged callback without valid state is rejected.
+  const cb = await request.get('/api/auth/steam/callback?state=x&openid.mode=id_res&openid.claimed_id=https://steamcommunity.com/openid/id/76561197960287930', { maxRedirects: 0 })
+  expect(cb.headers()['location']).toContain('/login?error=steam')
+  const reg = await request.post('/api/auth/register', { headers: { origin: new URL(page.url()).origin }, data: { username: 'x_user', email: 'x@test.local', password: 'Abcdef123', acceptTerms: true, confirmAge: true } })
+  expect(reg.status()).toBe(503)
+})
 
 test.describe.serial('user journey', () => {
-  test('register → deposit → open case → sell → upgrade → rewards → history → logout', async ({ page }) => {
-    await page.goto('/register')
-    await page.fill('input[name=username]', uname)
-    await page.fill('input[name=email]', `${uname}@test.local`)
-    await page.fill('input[name=password]', password)
-    await page.check('input[name=confirmAge]')
-    await page.check('input[name=acceptTerms]')
-    await page.click('button[type=submit]')
-    await expect(page.getByTestId('balance')).toHaveText('$0.00')
+  test('login → deposit → open case → sell → upgrade → rewards → history → logout', async ({ page }) => {
+    await emailLogin(page, 'pixel_hunter', 'Demo12345!')
+    await expect(page.getByTestId('balance')).toBeVisible()
+    const readBalance = async () => Number((await page.getByTestId('balance').innerText()).replace(/[^\d.]/g, ''))
+    const start = await readBalance()
 
     // Deposit through the mock provider (credited by signed webhook).
     await page.goto('/deposit')
-    await page.getByRole('button', { name: '$50', exact: true }).click()
+    await page.getByRole('button', { name: '500 C', exact: true }).click()
     await page.getByTestId('deposit-submit').click()
     await page.waitForURL(/\/deposit\/checkout\//)
     await page.getByTestId('mock-pay').click()
-    await expect(page.getByTestId('balance')).toHaveText('$50.00', { timeout: 20_000 })
+    await expect.poll(readBalance, { timeout: 20_000 }).toBe(start + 500)
 
     // Open a case (fast mode) and sell the drop from the result modal.
     await page.goto('/cases/starter')
@@ -38,19 +60,24 @@ test.describe.serial('user journey', () => {
     }
 
     await page.goto('/inventory')
-    await expect(page.getByText(/2 предметов/)).toBeVisible()
+    await expect(page.getByText(/\d+ предметов/)).toBeVisible()
 
-    // Upgrade: pick first inventory item and first target, server returns the chance.
+    // Upgrade: pick first inventory item, quick "×2" picks a target server-side, dial spins.
     await page.goto('/upgrade')
     await page.locator('section[aria-label="Инвентарь для апгрейда"] button').first().click()
-    await page.locator('section[aria-label="Целевые предметы"] button[aria-pressed]').first().click()
+    await page.getByTestId('quick-x2').click()
     await expect(page.getByTestId('upgrade-chance')).toHaveText(/\d+\.\d{2}%/, { timeout: 10_000 })
     await page.getByTestId('upgrade-button').click()
+    // The pointer must actually rotate while spinning.
+    await page.waitForTimeout(800)
+    const rotating = await page.evaluate(() => document.getAnimations().some((a) => a.playState === 'running'))
+    expect(rotating).toBe(true)
     await expect(page.getByText(/Апгрейд (успешен|не удался)/)).toBeVisible({ timeout: 15_000 })
 
-    // Daily reward can be claimed once.
+    // Daily reward: claimed once per UTC day (seed may have claimed it already).
     await page.goto('/rewards')
-    await page.getByTestId('reward-daily').getByRole('button', { name: 'Забрать' }).click()
+    const claim = page.getByTestId('reward-daily').getByRole('button', { name: 'Забрать' })
+    if (await claim.isVisible()) await claim.click()
     await expect(page.getByTestId('reward-daily').getByText('Получено')).toBeVisible()
 
     await page.goto('/history')
@@ -59,27 +86,21 @@ test.describe.serial('user journey', () => {
     await expect(page.getByText('Апгрейд').first()).toBeVisible()
 
     // Logout
-    await page.getByRole('button', { name: /demo|e2e_/ }).first().click()
+    await page.getByRole('button', { name: /pixel_hunter/ }).first().click()
     await page.getByRole('menuitem', { name: 'Выйти' }).click()
-    await expect(page.getByRole('link', { name: 'Регистрация' })).toBeVisible()
+    await expect(page.getByRole('link', { name: /Авторизация/ }).first()).toBeVisible()
     await page.goto('/inventory')
     await expect(page).toHaveURL(/\/login\?next=%2Finventory/)
   })
 
   test('wrong password is rejected with a clear message', async ({ page }) => {
-    await page.goto('/login')
-    await page.fill('input[name=login]', uname)
-    await page.fill('input[name=password]', 'wrong-password1')
-    await page.click('button[type=submit]')
+    await emailLogin(page, 'pixel_hunter', 'wrong-password1')
     await expect(page.getByText('Неверный логин или пароль')).toBeVisible()
   })
 })
 
 test('admin: case editor warns on invalid probability, balance adjust is audited', async ({ page }) => {
-  await page.goto('/login')
-  await page.fill('input[name=login]', 'admin@graderup.local')
-  await page.fill('input[name=password]', 'Admin12345!')
-  await page.click('button[type=submit]')
+  await emailLogin(page, 'admin@graderup.local', 'Admin12345!')
   await page.waitForURL((u) => !u.pathname.startsWith('/login'))
 
   await page.goto('/admin/cases')

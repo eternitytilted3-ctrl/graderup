@@ -57,7 +57,7 @@ export function CaseForm({ initial, onSaved }: { initial?: CaseRecord; onSaved: 
       <Field label="Slug (URL)" error={errs.slug}>
         <input name="slug" className="input h-10" defaultValue={initial?.slug} required pattern="[a-z0-9-]+" />
       </Field>
-      <Field label="Цена, $" error={errs.price}>
+      <Field label="Цена, C" error={errs.price}>
         <input name="price" type="number" step="0.01" min="0.01" className="input h-10 tnum" defaultValue={initial?.price} required />
       </Field>
       <Field label="Статус" error={errs.status}>

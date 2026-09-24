@@ -8,6 +8,8 @@ import { Roulette, type RouletteHandle } from '@/components/domain/Roulette'
 import { RarityBadge } from '@/components/domain/RarityBadge'
 import { useSession } from '@/components/SessionProvider'
 import { Button } from '@/components/ui/Button'
+import { SoundToggle } from '@/components/ui/SoundToggle'
+import { sfx } from '@/lib/sound'
 import { Modal } from '@/components/ui/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
@@ -53,6 +55,7 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
       const r = await api<{ balance: string; amount: string }>(`/api/inventory/${result.userItemId}/sell`, { method: 'POST' })
       setBalance(r.balance)
       setSold(true)
+      sfx.coin()
       toast.success(`Продано за ${formatMoney(r.amount)}`)
       setResult(null)
     } catch (err) {
@@ -89,6 +92,7 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
           <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} className="size-4 accent-[#7C5CFF]" />
           <Zap className="size-3.5" /> Быстрое открытие
         </label>
+        <SoundToggle />
       </div>
       {insufficient && user && !busy && <p className="mt-2 text-center text-xs text-muted">На балансе {formatMoney(user.balance)} — не хватает {formatMoney(Number(price) - Number(user.balance))}</p>}
 

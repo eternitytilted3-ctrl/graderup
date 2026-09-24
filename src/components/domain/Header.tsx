@@ -1,6 +1,6 @@
 'use client'
 
-import { Box, Gift, Menu, Package, TrendingUp, X } from 'lucide-react'
+import { Box, Gift, LogIn, Menu, Package, TrendingUp, X } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
@@ -69,14 +69,11 @@ export function Header() {
               </div>
             </>
           ) : (
-            <>
-              <Link href="/login" className="hidden sm:block">
-                <Button variant="ghost">{t.auth.login}</Button>
-              </Link>
-              <Link href="/register">
-                <Button>{t.auth.register}</Button>
-              </Link>
-            </>
+            <Link href="/login">
+              <Button className="font-display text-[15px] tracking-wide uppercase">
+                <LogIn className="size-4" /> Авторизация
+              </Button>
+            </Link>
           )}
           <button className="grid size-10 place-items-center rounded-md text-muted hover:bg-white/5 hover:text-text lg:hidden" onClick={() => setMenu((m) => !m)} aria-label="Меню" aria-expanded={menu}>
             {menu ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -108,7 +105,7 @@ export function Header() {
               </button>
             ) : (
               <Link href="/login" className="rounded-md px-3 py-3 text-[15px] text-text">
-                {t.auth.login}
+                Авторизация через Steam
               </Link>
             )}
           </nav>

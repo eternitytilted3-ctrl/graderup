@@ -5,11 +5,18 @@ import { route } from '@/server/http/handler'
 import { RateLimits } from '@/server/security/rateLimit'
 import { randomToken } from '@/server/security/crypto'
 
-export const GET = route({ rateLimit: RateLimits.login }, async () => {
+const cookieOpts = { httpOnly: true, sameSite: 'lax' as const, path: '/api/auth/steam', maxAge: 600, secure: process.env.NODE_ENV === 'production' }
+
+/** Starts Steam OpenID sign-in. Optional ?ref=CODE (referral) and ?next=/path are kept in short-lived cookies. */
+export const GET = route({ rateLimit: RateLimits.login }, async ({ req }) => {
   const provider = steamProvider()
   if (!provider.isEnabled()) throw Errors.disabled('Вход через Steam не настроен')
   const state = randomToken(16)
   const res = NextResponse.redirect(provider.getAuthorizationUrl({ returnTo: '/', state }))
-  res.cookies.set('gu_oauth_state', state, { httpOnly: true, sameSite: 'lax', path: '/api/auth/steam', maxAge: 600, secure: process.env.NODE_ENV === 'production' })
+  res.cookies.set('gu_oauth_state', state, cookieOpts)
+  const ref = req.nextUrl.searchParams.get('ref')
+  if (ref && /^[A-Za-z0-9]{3,16}$/.test(ref)) res.cookies.set('gu_ref', ref, cookieOpts)
+  const next = req.nextUrl.searchParams.get('next')
+  if (next && next.startsWith('/') && !next.startsWith('//') && next.length < 200) res.cookies.set('gu_next', next, cookieOpts)
   return res
 })

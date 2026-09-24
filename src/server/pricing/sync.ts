@@ -14,7 +14,7 @@ import { SteamMarketPriceProvider } from './SteamMarketPriceProvider'
 export async function getPriceProvider(id: string, current: Map<string, string>): Promise<PriceProvider | null> {
   switch (id) {
     case 'skinport':
-      return new SkinportPriceProvider(process.env.PRICE_CURRENCY ?? 'USD')
+      return new SkinportPriceProvider(process.env.PRICE_CURRENCY ?? 'RUB')
     case 'steam':
       return new SteamMarketPriceProvider()
     case 'mock':

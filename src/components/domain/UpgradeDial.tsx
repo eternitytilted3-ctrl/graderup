@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
+import { sfx } from '@/lib/sound'
 import { cn } from '@/lib/cn'
 
 export type DialState = 'idle' | 'spinning' | 'win' | 'loss'
@@ -8,25 +9,59 @@ export type DialState = 'idle' | 'spinning' | 'win' | 'loss'
 const R = 88
 const C = 2 * Math.PI * R
 
+export interface UpgradeDialHandle {
+  /** Spins the pointer ~5 turns and lands on the server roll (0..1 of the circle). */
+  spin: (rollFraction: number) => Promise<void>
+  reset: () => void
+}
+
 /**
  * Chance ring. The winning arc starts at 12 o'clock and covers `chance`% of the circle.
  * The pointer lands on `rollFraction` × 360° — the server's roll — so it lands inside the arc
- * exactly when the server says "win". Purely a visualization.
+ * exactly when the server says "win". Purely a visualization (Web Animations API).
  */
-export function UpgradeDial({ chance, state, rollFraction }: { chance: number | null; state: DialState; rollFraction: number | null }) {
-  const [angle, setAngle] = useState(0)
-  const turns = useRef(0)
+export const UpgradeDial = forwardRef<UpgradeDialHandle, { chance: number | null; state: DialState }>(function UpgradeDial({ chance, state }, ref) {
+  const pointer = useRef<HTMLDivElement>(null)
+  const anim = useRef<Animation | null>(null)
 
-  useEffect(() => {
-    if (state === 'spinning' && rollFraction !== null) {
-      turns.current += 5
-      setAngle(turns.current * 360 + rollFraction * 360)
-    }
-    if (state === 'idle') {
-      turns.current = 0
-      setAngle(0)
-    }
-  }, [state, rollFraction])
+  useImperativeHandle(ref, () => ({
+    reset() {
+      anim.current?.cancel()
+      anim.current = null
+      if (pointer.current) pointer.current.style.transform = 'rotate(0deg)'
+    },
+    async spin(rollFraction: number) {
+      const el = pointer.current
+      if (!el) return
+      anim.current?.cancel()
+      const end = 5 * 360 + rollFraction * 360
+      sfx.upgradeStart()
+      const a = el.animate([{ transform: 'rotate(0deg)' }, { transform: `rotate(${end}deg)` }], {
+        duration: 4200,
+        easing: 'cubic-bezier(0.12, 0.72, 0.1, 1)',
+        fill: 'forwards',
+      })
+      anim.current = a
+      // Tick every 18° travelled (effect-level easing → computed progress already eased).
+      let lastStep = 0
+      let raf = 0
+      const loop = () => {
+        const progress = a.effect?.getComputedTiming().progress ?? 0
+        const step = Math.floor((end * progress) / 18)
+        if (step !== lastStep) {
+          sfx.tick(Math.min(3, step - lastStep))
+          lastStep = step
+        }
+        raf = requestAnimationFrame(loop)
+      }
+      raf = requestAnimationFrame(loop)
+      try {
+        await a.finished
+      } catch {}
+      cancelAnimationFrame(raf)
+      el.style.transform = `rotate(${end}deg)`
+    },
+  }))
 
   const pct = chance ?? 0
   const arc = (Math.min(100, Math.max(0, pct)) / 100) * C
@@ -38,7 +73,8 @@ export function UpgradeDial({ chance, state, rollFraction }: { chance: number | 
           'absolute inset-4 rounded-full transition-all duration-500',
           state === 'win' && 'shadow-[0_0_60px_10px_rgb(53_208_127/0.35)]',
           state === 'loss' && 'shadow-[0_0_60px_6px_rgb(255_85_112/0.3)]',
-          state !== 'win' && state !== 'loss' && 'shadow-[0_0_50px_-6px_rgb(124_92_255/0.45)]',
+          state === 'spinning' && 'shadow-[0_0_70px_4px_rgb(0_212_255/0.35)]',
+          state === 'idle' && 'shadow-[0_0_50px_-6px_rgb(124_92_255/0.45)]',
         )}
       />
       <svg viewBox="0 0 200 200" className="relative size-full -rotate-90">
@@ -61,18 +97,12 @@ export function UpgradeDial({ chance, state, rollFraction }: { chance: number | 
           fill="none"
           strokeLinecap="butt"
           strokeDasharray={`${arc} ${C}`}
-          className="transition-[stroke-dasharray,stroke] duration-500"
+          className={cn('transition-[stroke-dasharray,stroke] duration-500', state === 'spinning' && 'animate-pulse')}
         />
       </svg>
-      {/* Pointer */}
-      <div
-        className="absolute inset-0"
-        style={{
-          transform: `rotate(${angle}deg)`,
-          transition: state === 'spinning' ? 'transform 3.8s cubic-bezier(0.15, 0.75, 0.1, 1)' : state === 'idle' ? 'none' : undefined,
-        }}
-      >
-        <div className="absolute top-[3%] left-1/2 h-[16%] w-1 -translate-x-1/2 rounded-full bg-text shadow-[0_0_12px_2px_rgba(255,255,255,0.6)]" />
+      <div ref={pointer} className="absolute inset-0 will-change-transform" style={{ transform: 'rotate(0deg)' }}>
+        <div className="absolute top-[2%] left-1/2 h-[18%] w-1.5 -translate-x-1/2 rounded-full bg-text shadow-[0_0_14px_3px_rgba(255,255,255,0.7)]" />
+        <div className="absolute top-[1%] left-1/2 size-3 -translate-x-1/2 rotate-45 bg-text" />
       </div>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <div className="label text-[10px]">Шанс</div>
@@ -85,7 +115,7 @@ export function UpgradeDial({ chance, state, rollFraction }: { chance: number | 
       {state === 'win' && <Particles />}
     </div>
   )
-}
+})
 
 function Particles() {
   const parts = Array.from({ length: 22 }).map((_, i) => {

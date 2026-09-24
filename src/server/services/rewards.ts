@@ -123,7 +123,7 @@ export async function claimReward(userId: string, rewardIdOrType: string, ip?: s
 
     const deposited = await depositTotal(userId, tx)
     if (D(deposited).lt(reward.minDepositTotal)) {
-      throw Errors.conflict(`Для получения нужно пополнить баланс минимум на $${reward.minDepositTotal}`, 'REQUIREMENT_NOT_MET')
+      throw Errors.conflict(`Для получения нужно пополнить баланс минимум на ${Number(reward.minDepositTotal)} C`, 'REQUIREMENT_NOT_MET')
     }
     const { periodKey, nextAt } = rewardWindow(reward.type, reward.cooldownSeconds)
     // UNIQUE(user_id, reward_id, period_key) — a replayed/parallel request cannot claim twice.

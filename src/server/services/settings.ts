@@ -58,10 +58,11 @@ export type SettingValue<K extends SettingKey> = z.infer<(typeof settingSchemas)
 export const settingDefaults: { [K in SettingKey]: SettingValue<K> } = {
   upgrade: { houseEdge: 0.08, minChance: 1, maxChance: 80, minMultiplier: 1.2, maxMultiplier: 100 },
   inventory: { sellRatio: 0.95 },
-  deposit: { minAmount: 1, maxAmount: 5000, presets: [5, 10, 25, 50, 100, 250], currency: 'USD' },
-  withdraw: { enabled: true, minAmount: 10, maxAmount: 2000, methods: ['card', 'crypto_usdt'] },
+  // Money is stored in coins (C). Deposits are charged in RUB, 1 C = 1 RUB.
+  deposit: { minAmount: 100, maxAmount: 500000, presets: [300, 500, 1000, 2500, 5000, 10000], currency: 'RUB' },
+  withdraw: { enabled: true, minAmount: 1000, maxAmount: 200000, methods: ['card', 'crypto_usdt'] },
   referral: { inviteeBonusPercent: 5 },
-  pricing: { provider: 'none', markupPercent: 0, minPrice: 0.03 },
+  pricing: { provider: 'none', markupPercent: 0, minPrice: 3 },
   site: { maintenance: false, announcement: '' },
 }
 

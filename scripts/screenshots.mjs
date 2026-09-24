@@ -8,7 +8,7 @@ const p = await ctx.newPage()
 const errors = []
 p.on('pageerror', e => errors.push(e.message))
 if (login) {
-  await p.goto(base + '/login'); await p.fill('input[name=login]', login.split(':')[0]); await p.fill('input[name=password]', login.split(':')[1])
+  await p.goto(base + '/login'); await p.getByRole('button', { name: /Вход по email/ }).click(); await p.fill('input[name=login]', login.split(':')[0]); await p.fill('input[name=password]', login.split(':')[1])
   await p.click('button[type=submit]'); await p.waitForURL(u => !u.pathname.startsWith('/login'), { timeout: 20000 })
 }
 for (const path of paths.split(',')) {

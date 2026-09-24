@@ -20,7 +20,13 @@ const schema = z.object({
   REAL_PAYMENT_API_URL: z.string().optional(),
   REAL_PAYMENT_API_KEY: z.string().optional(),
   REAL_PAYMENT_MERCHANT_ID: z.string().optional(),
-  STEAM_AUTH_ENABLED: bool,
+  /** Steam OpenID needs no key, so it is on unless explicitly disabled. */
+  STEAM_AUTH_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v !== 'false'),
+  /** Public email/password sign-up. Off by default: users sign in with Steam; email login stays for admins. */
+  EMAIL_REGISTRATION_ENABLED: bool,
   STEAM_CLIENT_ID: z.string().optional(),
   STEAM_CLIENT_SECRET: z.string().optional(),
   STEAM_API_KEY: z.string().optional(),
@@ -40,7 +46,7 @@ const schema = z.object({
     ),
   COUNTRY_HEADER: z.string().optional(),
   KYC_PROVIDER: z.string().default('none'),
-  KYC_WITHDRAW_THRESHOLD: z.coerce.number().nonnegative().default(500),
+  KYC_WITHDRAW_THRESHOLD: z.coerce.number().nonnegative().default(50000),
 })
 
 export type Env = z.infer<typeof schema>

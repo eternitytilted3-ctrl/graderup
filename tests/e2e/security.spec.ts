@@ -39,7 +39,7 @@ test.describe.serial('API security', () => {
     const open = await ctx.post('/api/cases/starter/open', { headers: h, data: { price: 0, userId: '00000000-0000-0000-0000-000000000000', itemId: 'x' } })
     expect(open.ok()).toBeTruthy()
     const after = (await open.json()).balance
-    expect(Number(before) - Number(after)).toBeCloseTo(0.49, 2)
+    expect(Number(before) - Number(after)).toBeCloseTo(49, 2)
 
     // Upgrade with a fake chance/result is validated server-side
     const bad = await ctx.post('/api/upgrade', { headers: h, data: { userItemId: 'not-a-uuid', targetItemId: 'x', chance: 100, result: 'win' } })

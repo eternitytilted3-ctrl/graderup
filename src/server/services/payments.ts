@@ -30,7 +30,7 @@ export async function createPayment(userId: string, amountInput: number, ip?: st
   const cfg = await getSetting('deposit')
   const amount = toMoney(amountInput)
   if (D(amount).lt(cfg.minAmount) || D(amount).gt(cfg.maxAmount)) {
-    throw Errors.badRequest(`Сумма пополнения должна быть от $${cfg.minAmount} до $${cfg.maxAmount}`)
+    throw Errors.badRequest(`Сумма пополнения должна быть от ${cfg.minAmount} до ${cfg.maxAmount} C`)
   }
   const provider = getPaymentProvider()
   const db = getDb()

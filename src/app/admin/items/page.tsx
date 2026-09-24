@@ -131,7 +131,7 @@ export default function AdminItems() {
           <Field label="Название" error={errs.name}>
             <input name="name" className="input h-10" defaultValue={cur?.name} required />
           </Field>
-          <Field label="Цена, $" error={errs.price}>
+          <Field label="Цена, C" error={errs.price}>
             <input name="price" type="number" step="0.01" min="0.01" className="input h-10 tnum" defaultValue={cur?.price} required />
           </Field>
           <Field label="Редкость" error={errs.rarity}>
