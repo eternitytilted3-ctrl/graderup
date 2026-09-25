@@ -8,7 +8,7 @@ describe('market.csgo.com buy-for delivery', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('buys for the player trade URL with a capped price in kopecks and our withdrawal id', async () => {
-    const fetchMock = vi.fn(async (_url: string) => Response.json({ success: true, id: '777', price: 12000 }))
+    const fetchMock = vi.fn(async (url: string) => url && Response.json({ success: true, id: '777', price: 12000 }))
     vi.stubGlobal('fetch', fetchMock)
     const r = await p.requestWithdrawal({ withdrawalId: 'w-1', marketHashName: 'AK-47 | Redline (Field-Tested)', maxPrice: '2450.50', tradeUrl: TRADE })
     expect(r.externalId).toBe('w-1')
