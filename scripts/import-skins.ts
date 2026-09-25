@@ -4,7 +4,7 @@ import { importCs2Catalog } from '../src/server/catalog/cs2'
 import { closeDb } from '../src/server/db/client'
 
 /**
- * Imports/updates real CS2 skins (names, rarities, Steam CDN images, Skinport RUB prices).
+ * Imports/updates real CS2 skins (names, rarities, Steam CDN images, RUB prices from market.csgo.com → Skinport).
  * `npm run skins:import` — update catalogue & prices
  * `npm run skins:import -- --rebuild-cases` — also rebuild the preset cases from the catalogue
  */

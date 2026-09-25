@@ -24,7 +24,9 @@
     "admin:create": "tsx --conditions=react-server scripts/create-admin.ts",
     "assets:generate": "node scripts/generate-assets.mjs",
     "prices:sync": "tsx --conditions=react-server scripts/sync-prices.ts",
-    "skins:import": "tsx --conditions=react-server scripts/import-skins.ts"
+    "skins:import": "tsx --conditions=react-server scripts/import-skins.ts",
+    "cases:rebuild": "tsx --conditions=react-server scripts/rebuild-cases.ts",
+    "prices:update": "npm run prices:sync && npm run cases:rebuild"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",

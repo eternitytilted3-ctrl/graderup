@@ -1,9 +1,9 @@
 import 'server-only'
-import { createHash } from 'node:crypto'
 import { sql } from 'drizzle-orm'
 import { getDb } from '../db/client'
 import { items, type Rarity } from '../db/schema'
-import { SkinportPriceProvider } from '../pricing/SkinportPriceProvider'
+import { estimateRubPrice } from '../pricing/estimate'
+import { marketPriceChain } from '../pricing/sync'
 
 /**
  * CS2 skin catalogue importer.
@@ -33,6 +33,7 @@ export interface Cs2Skin {
   weapon: string
   category: string
   wear: string | null
+  pattern: string | null
   isKnifeOrGloves: boolean
   description: string
 }
@@ -75,6 +76,7 @@ export async function fetchCs2Skins(): Promise<Cs2Skin[]> {
       weapon: s.weapon?.name ?? '',
       category,
       wear: s.wear?.name ?? null,
+      pattern: s.pattern?.name ?? null,
       isKnifeOrGloves: name.startsWith('★'),
       description: [s.weapon?.name, s.pattern?.name, s.wear?.name].filter(Boolean).join(' · '),
     })
@@ -82,48 +84,22 @@ export async function fetchCs2Skins(): Promise<Cs2Skin[]> {
   return out
 }
 
-const WEAR_MULT: Record<string, number> = { 'Factory New': 1.7, 'Minimal Wear': 1.3, 'Field-Tested': 1, 'Well-Worn': 0.85, 'Battle-Scarred': 0.75 }
-const RARITY_RANGE: Record<Rarity, [number, number]> = {
-  common: [3, 15],
-  uncommon: [8, 60],
-  rare: [25, 400],
-  epic: [150, 2500],
-  legendary: [700, 12000],
-  mythic: [2500, 45000],
-}
-
-/** Deterministic price estimate (coins) used only when no market price source is reachable. */
-export function estimatePrice(s: Cs2Skin): number {
-  const h = createHash('sha1').update(s.marketHashName.replace(/\s*\(.*\)$/, '')).digest()
-  const u = h.readUInt32BE(0) / 0xffffffff
-  let [lo, hi] = RARITY_RANGE[s.rarity]
-  if (s.isKnifeOrGloves) [lo, hi] = [9000, 160000]
-  const base = Math.exp(Math.log(lo) + (Math.log(hi) - Math.log(lo)) * u)
-  const price = base * (WEAR_MULT[s.wear ?? ''] ?? 1)
-  return Math.max(3, Math.round(price * 100) / 100)
-}
-
 /**
- * Upserts CS2 skins into `items` (matched by market_hash_name). Prices: Skinport (RUB = coins)
- * when reachable, otherwise a deterministic estimate (price_source = 'estimate').
+ * Upserts CS2 skins into `items` (matched by market_hash_name). Prices in RUB (= coins):
+ * market.csgo.com → Skinport → offline estimate (price_source = 'estimate') for anything left.
  */
 export async function importCs2Catalog(opts: { log?: (m: string) => void } = {}) {
   const log = opts.log ?? (() => {})
   const skins = await fetchCs2Skins()
   log(`catalogue: ${skins.length} skins`)
-  let prices = new Map<string, { price: string }>()
-  let source = 'estimate'
-  try {
-    prices = await new SkinportPriceProvider('RUB').fetchPrices(skins.map((s) => s.marketHashName))
-    if (prices.size > 0) source = 'skinport'
-    log(`skinport prices: ${prices.size}`)
-  } catch (err) {
-    log(`skinport unavailable (${(err as Error).message}) — using estimated prices`)
-  }
+  const chain = marketPriceChain()
+  const prices = await chain.fetchPrices(skins.map((s) => s.marketHashName))
+  for (const e of chain.errors) log(`price source unavailable — ${e}`)
+  log(`market prices: ${prices.size}/${skins.length}${prices.size < skins.length ? ' (rest: estimate)' : ''}`)
   const db = getDb()
   const rows = skins.map((s) => {
     const market = prices.get(s.marketHashName)?.price
-    const price = market ?? estimatePrice(s).toFixed(2)
+    const price = market ?? estimateRubPrice(s).toFixed(2)
     return {
       name: s.marketHashName,
       marketHashName: s.marketHashName,
@@ -134,7 +110,7 @@ export async function importCs2Catalog(opts: { log?: (m: string) => void } = {})
       wear: s.wear,
       price,
       marketPrice: market ?? null,
-      priceSource: market ? source : 'estimate',
+      priceSource: market ? (chain.sources.get(s.marketHashName) ?? 'market') : 'estimate',
       priceUpdatedAt: new Date(),
     }
   })
@@ -159,6 +135,6 @@ export async function importCs2Catalog(opts: { log?: (m: string) => void } = {})
         },
       })
   }
-  log(`imported ${rows.length} items (prices: ${source})`)
-  return { count: rows.length, priceSource: source }
+  log(`imported ${rows.length} items`)
+  return { count: rows.length, marketPriced: prices.size }
 }

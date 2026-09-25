@@ -26,6 +26,10 @@ export interface CasePreset {
   theme?: 'knives' | 'gloves'
   /** Knife-type case: rare end = only this knife (CS2 market prefix after "★ "), e.g. "Gut Knife". */
   knife?: string
+  /** Card ribbon (limited-category cases default to 'limited'). */
+  badge?: 'limited' | 'new' | 'hot'
+  /** Limited-time case: ends this many days after it is first created (editable in the admin). */
+  endsInDays?: number
 }
 
 /** Case line-up (prices in coins). Art: public/assets/cases/<slug>.svg (scripts/generate-assets.mjs). */
@@ -49,7 +53,7 @@ export const CASE_PRESETS: CasePreset[] = [
   { slug: 'gloves', name: 'Перчатки', price: 4999, category: 'limited', description: 'Перчатки ★ и дорогие винтовки.', theme: 'gloves' },
   // ── Knife-type cases: every case holds one CS2 knife model (all its finishes) + cheaper skins ──
   { slug: 'hook', name: 'Крюк', price: 1199, category: 'knife-types', description: 'Ножи с лезвием-крюком (Gut Knife) во всех раскрасках.', knife: 'Gut Knife', featured: true },
-  { slug: 'kukri', name: 'Кукри', price: 2499, category: 'knife-types', description: 'Изогнутый клинок Кукри — новинка CS2.', knife: 'Kukri Knife', featured: true },
+  { slug: 'kukri', name: 'Кукри', price: 2499, category: 'knife-types', description: 'Изогнутый клинок Кукри — новинка CS2.', knife: 'Kukri Knife', featured: true, badge: 'new' },
   { slug: 'karambit', name: 'Коготь тигра', price: 4999, category: 'knife-types', description: 'Легендарный Керамбит во всех раскрасках.', knife: 'Karambit', featured: true },
   { slug: 'butterfly', name: 'Мотылёк', price: 4499, category: 'knife-types', description: 'Нож-бабочка для любителей трюков.', knife: 'Butterfly Knife' },
   { slug: 'm9', name: 'Штык M9', price: 3999, category: 'knife-types', description: 'Штык-нож M9 — классика дорогих дропов.', knife: 'M9 Bayonet' },
@@ -68,7 +72,7 @@ export const CASE_PRESETS: CasePreset[] = [
   { slug: 'nomad', name: 'Кочевник', price: 1999, category: 'knife-types', description: 'Nomad — крепкий нож для любых условий.', knife: 'Nomad Knife' },
   { slug: 'skeleton', name: 'Скелет', price: 3199, category: 'knife-types', description: 'Скелетный нож с облегчённой рукоятью.', knife: 'Skeleton Knife' },
   { slug: 'flip', name: 'Флип', price: 1899, category: 'knife-types', description: 'Складной Flip Knife.', knife: 'Flip Knife' },
-  { slug: 'aurora', name: 'Аврора', price: 7999, category: 'limited', description: 'Лимитированный кейс с Covert-скинами.' },
+  { slug: 'aurora', name: 'Аврора', price: 7999, category: 'limited', description: 'Лимитированный кейс с Covert-скинами.', endsInDays: 21 },
   { slug: 'monolith', name: 'Монолит', price: 12999, category: 'limited', description: 'Для хайроллеров.' },
   { slug: 'premium', name: 'Премиум', price: 17999, category: 'limited', description: 'Максимальные ставки — максимальные дропы.', featured: true },
 ]
@@ -188,6 +192,8 @@ export async function buildCases(opts: { rtp?: number } = {}) {
           price: preset.price.toFixed(2),
           sortOrder: order++,
           isFeatured: preset.featured ?? false,
+          badge: preset.badge ?? (preset.category === 'limited' ? 'limited' : null),
+          endsAt: preset.endsInDays ? new Date(Date.now() + preset.endsInDays * 86_400_000) : null,
           categoryId: catIds.get(preset.category) ?? null,
         })
         .onConflictDoUpdate({

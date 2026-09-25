@@ -58,7 +58,7 @@ npm run dev                     # http://localhost:3000
 | `ALLOW_MOCK_PAYMENTS_IN_PRODUCTION` | нет | разрешить mock-платежи при `NODE_ENV=production` (только стенды!) |
 | `REAL_PAYMENT_API_URL/_API_KEY/_MERCHANT_ID` | для real | реквизиты провайдера |
 | `STEAM_AUTH_ENABLED`, `STEAM_API_KEY` | нет | вход через Steam (OpenID 2.0); `STEAM_CLIENT_ID/SECRET` зарезервированы |
-| `PRICE_PROVIDER`, `PRICE_CURRENCY` | нет | синхронизация рыночных цен скинов: `skinport` \| `steam` \| `mock` |
+| `PRICE_PROVIDER`, `PRICE_CURRENCY` | нет | синхронизация рыночных цен скинов (RUB): `auto` (market.csgo.com → Skinport) \| `marketcsgo` \| `skinport` \| `steam` \| `mock` |
 | `TRUST_PROXY` | нет | см. «Деплой» |
 | `FEATURE_WITHDRAW` | нет | `false` отключает вывод |
 | `MIN_AGE`, `RESTRICTED_COUNTRIES`, `COUNTRY_HEADER` | нет | возраст/гео-ограничения |
@@ -128,7 +128,7 @@ SQLi — параметризованные запросы Drizzle; XSS — Reac
 `PriceProvider` (`src/server/pricing`) отдаёт цены по `market_hash_name`; `syncPrices()` применяет наценку/минимум из настройки `pricing` и обновляет `items.price` (кроме `price_locked`).
 
 1. В админке → «Предметы» укажите у предмета точный `market_hash_name` (например `AK-47 | Redline (Field-Tested)`) и при необходимости https-URL картинки.
-2. В «Настройках» → `pricing`: `provider` (`skinport`/`steam`), `markupPercent`, `minPrice` (или `PRICE_PROVIDER` в ENV).
+2. В «Настройках» → `pricing`: `provider` (`auto` = market.csgo.com → Skinport, либо `marketcsgo`/`skinport`/`steam`), `markupPercent`, `minPrice` (или `PRICE_PROVIDER` в ENV).
 3. «Синхронизировать цены» в админке или `npm run prices:sync` по cron (например раз в час).
 4. После синхронизации проверьте RTP кейсов в редакторе — цены влияют на экономику.
 
@@ -155,6 +155,7 @@ cd /opt/graderup
 PUBLIC_HOST=45.131.186.197 PORT=4555 bash deploy/setup-vps.sh   # Docker, секреты, сборка, миграции, seed
 bash deploy/update.sh                                            # обновление: git pull + пересборка
 docker compose -f docker-compose.prod.yml logs -f app            # логи
+docker compose -f docker-compose.prod.yml --env-file .env.production exec app npm run prices:update  # свежие цены (RUB) + пересчёт кейсов
 ```
 
 `deploy/setup-vps.sh` создаёт `.env.production` (gitignored) со случайными секретами и паролем администратора (`SEED_ADMIN_PASSWORD`), `SEED_DEMO=false` (без демо-пользователей и демо-дропов). Mock-платежи и mock-вывод скинов в production выключены — подключите реальные ключи Pally/AnyPay/xRocket в `.env.production` и выполните `bash deploy/update.sh`. Для HTTPS привяжите домен и поставьте TLS (например, Caddy/certbot) перед nginx, затем смените `APP_URL` на `https://…`.
@@ -186,7 +187,7 @@ npm run test:e2e                      # CHROME_PATH=/path/to/chrome при не�
 | Реальные платежи | договор с провайдером + реализация `RealPaymentProvider` (создание платежа, схема подписи webhook) |
 | Вывод средств | выплаты выполняются вне системы; админка фиксирует одобрение/отклонение |
 | Вход через Steam | `STEAM_AUTH_ENABLED=true`, `STEAM_API_KEY` |
-| Рыночные цены скинов | `PRICE_PROVIDER=skinport` или `steam` (соблюдайте их условия) |
+| Рыночные цены скинов | `PRICE_PROVIDER=auto` (market.csgo.com → Skinport, RUB) — соблюдайте их условия. Обновить цены и кейсы: `npm run prices:update` |
 | KYC/AML | интеграция с KYC-вендором |
 | Email (подтверждение/сброс пароля) | SMTP-провайдер — не реализовано |
 | Юридические тексты | проверка юристом |

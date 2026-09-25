@@ -183,6 +183,10 @@ export const cases = pgTable(
     status: caseStatus('status').notNull().default('active'),
     sortOrder: integer('sort_order').notNull().default(0),
     isFeatured: boolean('is_featured').notNull().default(false),
+    /** Card ribbon: limited | new | hot (null → HOT when featured). */
+    badge: varchar('badge', { length: 16 }),
+    /** Limited-time case: hidden and not openable after this moment. */
+    endsAt: timestamp('ends_at', { withTimezone: true }),
     categoryId: uuid('category_id').references(() => caseCategories.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -555,6 +559,16 @@ export const rateLimits = pgTable(
     count: integer('count').notNull().default(0),
   },
   (t) => [uniqueIndex('rate_limits_pk').on(t.key, t.windowStart), index('rate_limits_window_idx').on(t.windowStart)],
+)
+
+/** Anonymous presence for the real "online" counter: random visitor id (gu_vid cookie) → last seen. */
+export const presence = pgTable(
+  'presence',
+  {
+    visitorId: varchar('visitor_id', { length: 32 }).primaryKey(),
+    seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('presence_seen_idx').on(t.seenAt)],
 )
 
 /** Stores responses of money-moving requests so a retried request returns the same result. */

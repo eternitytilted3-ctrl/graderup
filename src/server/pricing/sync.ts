@@ -6,13 +6,25 @@ import { getDb } from '../db/client'
 import { items } from '../db/schema'
 import { logAdmin, logEvent } from '../services/log'
 import { getSetting } from '../services/settings'
+import { ChainPriceProvider } from './ChainPriceProvider'
+import { MarketCsgoPriceProvider } from './MarketCsgoPriceProvider'
 import { MockPriceProvider } from './MockPriceProvider'
 import type { PriceProvider } from './PriceProvider'
 import { SkinportPriceProvider } from './SkinportPriceProvider'
 import { SteamMarketPriceProvider } from './SteamMarketPriceProvider'
 
+/** Real RUB market prices: market.csgo.com first, Skinport fills the gaps. */
+export function marketPriceChain() {
+  const currency = process.env.PRICE_CURRENCY ?? 'RUB'
+  return new ChainPriceProvider([new MarketCsgoPriceProvider(currency), new SkinportPriceProvider(currency)])
+}
+
 export async function getPriceProvider(id: string, current: Map<string, string>): Promise<PriceProvider | null> {
   switch (id) {
+    case 'auto':
+      return marketPriceChain()
+    case 'marketcsgo':
+      return new MarketCsgoPriceProvider(process.env.PRICE_CURRENCY ?? 'RUB')
     case 'skinport':
       return new SkinportPriceProvider(process.env.PRICE_CURRENCY ?? 'RUB')
     case 'steam':
@@ -50,7 +62,7 @@ export async function syncPrices(opts: { adminId?: string; dryRun?: boolean } = 
     if (!opts.dryRun) {
       await db
         .update(items)
-        .set({ marketPrice: mp.price, price: newPrice, priceSource: provider.id, priceUpdatedAt: new Date(), updatedAt: new Date() })
+        .set({ marketPrice: mp.price, price: newPrice, priceSource: provider instanceof ChainPriceProvider ? (provider.sources.get(r.marketHashName!) ?? provider.id) : provider.id, priceUpdatedAt: new Date(), updatedAt: new Date() })
         .where(eq(items.id, r.id))
     }
     if (newPrice !== r.price) changes.push({ id: r.id, name: r.name, from: r.price, to: newPrice })

@@ -1,8 +1,8 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { D, toMoney } from '@/lib/money'
-import { RARITIES, type CaseCategoryDTO, type CaseDTO, type CaseItemDTO, type ItemDTO, type OpenCaseDrop, type OpenCaseResult, type OpenCasesResult, type Rarity } from '@/lib/types'
+import { CASE_BADGES, RARITIES, type CaseBadge, type CaseCategoryDTO, type CaseDTO, type CaseItemDTO, type ItemDTO, type OpenCaseDrop, type OpenCaseResult, type OpenCasesResult, type Rarity } from '@/lib/types'
 import { getDb } from '../db/client'
 import { caseCategories, caseItems, caseOpenings, cases, items, userItems, users } from '../db/schema'
 import { Errors } from '../http/errors'
@@ -32,6 +32,8 @@ function toCaseDTO(c: typeof cases.$inferSelect, extra: Partial<CaseDTO> = {}): 
     price: c.price,
     status: c.status,
     isFeatured: c.isFeatured,
+    badge: (CASE_BADGES as readonly string[]).includes(c.badge ?? '') ? (c.badge as CaseBadge) : c.isFeatured ? 'hot' : null,
+    endsAt: c.endsAt ? c.endsAt.toISOString() : null,
     categoryId: c.categoryId,
     ...extra,
   }
@@ -48,10 +50,15 @@ export async function listCases(opts: { includeDisabled?: boolean } = {}): Promi
     .from(cases)
     .leftJoin(caseItems, eq(caseItems.caseId, cases.id))
     .leftJoin(items, eq(items.id, caseItems.itemId))
-    .where(opts.includeDisabled ? undefined : eq(cases.status, 'active'))
+    .where(opts.includeDisabled ? undefined : and(eq(cases.status, 'active'), or(isNull(cases.endsAt), gt(cases.endsAt, sql`now()`))))
     .groupBy(cases.id)
     .orderBy(asc(cases.sortOrder), asc(cases.price))
   return rows.map((r) => toCaseDTO(r.c, { itemCount: r.itemCount, topRarity: r.topRarity ?? undefined }))
+}
+
+/** Limited-time case past its end. */
+function isEnded(c: { endsAt: Date | null }) {
+  return c.endsAt !== null && c.endsAt.getTime() <= Date.now()
 }
 
 /** Cases grouped into active categories (catalogue sections); uncategorised cases go last. */
@@ -89,7 +96,7 @@ async function loadCaseEntries(caseId: string) {
 export async function getCase(idOrSlug: string, opts: { includeDisabled?: boolean } = {}) {
   const db = getDb()
   const [c] = await db.select().from(cases).where(caseWhere(idOrSlug))
-  if (!c || (c.status !== 'active' && !opts.includeDisabled)) throw Errors.notFound('Кейс не найден')
+  if (!c || ((c.status !== 'active' || isEnded(c)) && !opts.includeDisabled)) throw Errors.notFound('Кейс не найден или больше недоступен')
   const [entries, casesCfg] = await Promise.all([loadCaseEntries(c.id), getSetting('cases')])
   const totalWeight = entries.reduce((s, e) => s + e.ci.dropWeight, 0)
   const itemsOut: CaseItemDTO[] = entries.map((e) => {
@@ -133,6 +140,7 @@ export async function openCases(userId: string, caseIdOrSlug: string, count = 1,
     const user = await lockUser(tx, userId)
     const [c] = await tx.select().from(cases).where(caseWhere(caseIdOrSlug))
     if (!c || c.status !== 'active') throw Errors.notFound('Кейс не найден или отключён')
+    if (isEnded(c)) throw Errors.badRequest('Время этого кейса истекло')
     // Early check for a clearer error; the ledger re-checks under the same lock.
     if (D(user.balance).lt(D(c.price).mul(count))) throw Errors.insufficientFunds()
 

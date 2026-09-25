@@ -319,6 +319,9 @@ export interface CaseInput {
   status: 'active' | 'disabled'
   sortOrder?: number
   isFeatured?: boolean
+  badge?: 'limited' | 'new' | 'hot' | null
+  /** ISO datetime; null = permanent case. */
+  endsAt?: string | null
   categoryId?: string | null
 }
 
@@ -370,6 +373,8 @@ export async function saveCase(adminId: string, id: string | null, input: CaseIn
     status: input.status,
     sortOrder: input.sortOrder ?? 0,
     isFeatured: input.isFeatured ?? false,
+    badge: input.badge ?? null,
+    endsAt: input.endsAt ? new Date(input.endsAt) : null,
     categoryId: input.categoryId || null,
   }
   return getDb().transaction(async (tx) => {

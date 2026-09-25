@@ -18,7 +18,16 @@ export interface CaseRecord {
   status: 'active' | 'disabled'
   sortOrder: number
   isFeatured: boolean
+  badge?: 'limited' | 'new' | 'hot' | null
+  endsAt?: string | null
   categoryId?: string | null
+}
+
+/** ISO → value for <input type="datetime-local"> in the admin's local time. */
+function toLocalInput(iso?: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
 }
 
 export function CaseForm({ initial, onSaved }: { initial?: CaseRecord; onSaved: (c: CaseRecord) => void }) {
@@ -41,6 +50,8 @@ export function CaseForm({ initial, onSaved }: { initial?: CaseRecord; onSaved: 
         status: fd.get('status'),
         sortOrder: Number(fd.get('sortOrder') || 0),
         isFeatured: fd.get('isFeatured') === 'on',
+        badge: String(fd.get('badge') || '') || null,
+        endsAt: fd.get('endsAt') ? new Date(String(fd.get('endsAt'))).toISOString() : null,
         categoryId: String(fd.get('categoryId') || '') || null,
       }
       const r = await api<CaseRecord>(initial ? `/api/admin/cases/${initial.id}` : '/api/admin/cases', { method: initial ? 'PUT' : 'POST', body })
@@ -84,6 +95,17 @@ export function CaseForm({ initial, onSaved }: { initial?: CaseRecord; onSaved: 
       </Field>
       <Field label="Порядок сортировки" error={errs.sortOrder}>
         <input name="sortOrder" type="number" className="input h-10" defaultValue={initial?.sortOrder ?? 0} />
+      </Field>
+      <Field label="Бейдж на карточке" error={errs.badge}>
+        <select name="badge" className="input h-10" defaultValue={initial?.badge ?? ''}>
+          <option value="">— авто (HOT для популярных) —</option>
+          <option value="limited">LIMITED</option>
+          <option value="new">NEW</option>
+          <option value="hot">HOT</option>
+        </select>
+      </Field>
+      <Field label="Доступен до (таймер; пусто — бессрочно)" error={errs.endsAt}>
+        <input name="endsAt" type="datetime-local" className="input h-10" defaultValue={toLocalInput(initial?.endsAt)} />
       </Field>
       <div className="sm:col-span-2">
         <Field label="Описание" error={errs.description}>

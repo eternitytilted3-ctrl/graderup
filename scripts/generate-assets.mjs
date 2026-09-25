@@ -112,8 +112,7 @@ for (const [name, body] of Object.entries(items)) {
   writeFileSync(join(root, 'items', `${name}.svg`), svg(body))
 }
 
-// Cases: 3/4-perspective weapon crates (original drawing) — lid, front, side, ribs, latches,
-// rivets, stencil, scratches, optional hazard band, and a large weapon silhouette on the front panel.
+// Case themes: body colour, dark shade, accent (stickers/tape), weapon art, caution tape.
 const crateTheme = [
   // slug, main, dark, accent, weapon art, hazard band
   ['magnum', '#6d7480', '#2a2f37', '#ffb547', 'pistol', false],
@@ -200,72 +199,132 @@ crateTheme.push(
 
 let rs = 1
 const rnd = () => ((rs = (rs * 48271) % 2147483647) / 2147483647)
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+const mix = (a, b, t) => '#' + hex(a).map((v, i) => Math.round(v + (hex(b)[i] - v) * t).toString(16).padStart(2, '0')).join('')
 
+// Front-facing hard-shell weapon case seen slightly from above (original drawing): lid with carry
+// handle, rubber corner bumpers, side handles, two latches + padlock plate on the seam, a paper
+// shipping label, a round patch sticker, a big "glitch" sticker with the case's weapon, embossed
+// brand, optional caution tape and weathering. viewBox 260×200.
 for (const [slug, main, dark, accent, art, hazard] of crateTheme) {
   rs = [...slug].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647 || 1
-  const id = slug.replace(/[^a-z]/g, '')
-  // Scratches (weathering)
+  const id = slug.replace(/[^a-z0-9]/g, '')
+  const light = mix(main, '#ffffff', 0.28)
+  const bumper = mix(dark, '#000000', 0.35)
+  const isKnife = Boolean(knifeArt[art])
+
   let scratches = ''
-  for (let i = 0; i < 26; i++) {
-    const x = 30 + rnd() * 170
-    const y = 72 + rnd() * 92
-    const l = 4 + rnd() * 14
-    const a = (rnd() - 0.5) * 1.2
-    scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} l${(l * Math.cos(a)).toFixed(1)} ${(l * Math.sin(a)).toFixed(1)}" stroke="#fff" stroke-opacity="${(0.05 + rnd() * 0.12).toFixed(2)}" stroke-width="${(0.6 + rnd()).toFixed(1)}"/>`
+  for (let i = 0; i < 34; i++) {
+    const x = 24 + rnd() * 212
+    const y = 54 + rnd() * 124
+    const l = 3 + rnd() * 13
+    const ang = (rnd() - 0.5) * 1.4
+    scratches += `<path d="M${x.toFixed(1)} ${y.toFixed(1)} l${(l * Math.cos(ang)).toFixed(1)} ${(l * Math.sin(ang)).toFixed(1)}" stroke="#fff" stroke-opacity="${(0.05 + rnd() * 0.13).toFixed(2)}" stroke-width="${(0.5 + rnd() * 0.9).toFixed(1)}"/>`
   }
-  const rivets = [
-    [28, 70], [192, 70], [28, 160], [192, 160], [110, 70], [110, 160],
-  ].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2" fill="url(#${id}m)"/><circle cx="${x - 0.6}" cy="${y - 0.6}" r="0.8" fill="#fff" fill-opacity=".7"/>`).join('')
-  const hazardBand = hazard
-    ? `<clipPath id="${id}hz"><rect x="22" y="150" width="176" height="18"/></clipPath>
-       <g clip-path="url(#${id}hz)">${Array.from({ length: 16 }, (_, i) => `<path d="M${14 + i * 14} 168 l12 -18 h7 l-12 18 z" fill="${accent}" fill-opacity=".85"/>`).join('')}</g>
-       <rect x="22" y="150" width="176" height="18" fill="none" stroke="#000" stroke-opacity=".35"/>`
-    : `<rect x="22" y="152" width="176" height="14" fill="#000" fill-opacity=".22"/>`
+  let chips = ''
+  for (let i = 0; i < 14; i++) {
+    const top = rnd() < 0.5
+    const x = 30 + rnd() * 200
+    const y = top ? 51 + rnd() * 2 : 179 + rnd() * 2
+    chips += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(1 + rnd() * 3).toFixed(1)}" ry="${(0.5 + rnd()).toFixed(1)}" fill="#fff" fill-opacity="${(0.15 + rnd() * 0.25).toFixed(2)}"/>`
+  }
+  const ridges = (x) => Array.from({ length: 14 }, (_, i) => `<path d="M${x + 4} ${60 + i * 8.4} h10" stroke="#000" stroke-opacity=".32" stroke-width="2"/><path d="M${x + 4} ${61.6 + i * 8.4} h10" stroke="#fff" stroke-opacity=".06" stroke-width="1"/>`).join('')
+  const latch = (x) => `
+    <rect x="${x}" y="84" width="26" height="40" rx="3.5" fill="#000" fill-opacity=".35" transform="translate(1.5 2.5)"/>
+    <rect x="${x}" y="84" width="26" height="40" rx="3.5" fill="url(#${id}mt)"/>
+    <rect x="${x + 4}" y="94" width="18" height="24" rx="2.5" fill="url(#${id}md)"/>
+    <path d="M${x + 4} 99 h18" stroke="#000" stroke-opacity=".35" stroke-width="1.2"/>
+    <rect x="${x + 8}" y="86" width="10" height="5" rx="1.5" fill="#1b1d22"/>
+    <circle cx="${x + 5}" cy="89" r="1.4" fill="#2a2c31"/><circle cx="${x + 21}" cy="89" r="1.4" fill="#2a2c31"/>
+    <path d="M${x + 1.5} 85.5 h23" stroke="#fff" stroke-opacity=".55" stroke-width="1"/>`
+  const barcode = Array.from({ length: 16 }, (_, i) => `<rect x="${154 + i * 2.1}" y="72" width="${rnd() < 0.5 ? 0.9 : 1.5}" height="8" fill="#23262c"/>`).join('')
+  const tape = hazard
+    ? `<g clip-path="url(#${id}clip)"><g transform="rotate(-36 60 64)">
+         <rect x="-40" y="58" width="170" height="13" fill="${mix(accent, '#ffd21a', 0.55)}"/>
+         ${Array.from({ length: 18 }, (_, i) => `<path d="M${-40 + i * 11} 71 l7 -13 h5 l-7 13 z" fill="#111"/>`).join('')}
+         <rect x="-40" y="58" width="170" height="13" fill="none" stroke="#000" stroke-opacity=".35"/>
+       </g></g>`
+    : ''
   const weapon = items[art]
-  const body = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 190" fill="none">
+  const artTf = isKnife ? 'translate(68 93) scale(.62) rotate(-12 100 70)' : 'translate(70 94) scale(.6)'
+  const body = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 200" fill="none">
   <defs>
-    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${main}"/><stop offset="1" stop-color="${dark}"/></linearGradient>
-    <linearGradient id="${id}t" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${main}"/><stop offset=".5" stop-color="${main}" stop-opacity=".95"/><stop offset="1" stop-color="${dark}"/></linearGradient>
-    <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${dark}"/><stop offset="1" stop-color="#07090c"/></linearGradient>
-    <linearGradient id="${id}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f1ede2"/><stop offset="1" stop-color="#8a8272"/></linearGradient>
-    <linearGradient id="${id}p" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity=".35"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>
-    <radialGradient id="${id}g" cx=".5" cy=".62" r=".55"><stop offset="0" stop-color="${accent}" stop-opacity=".35"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient>
+    <linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${main}"/><stop offset=".55" stop-color="${mix(main, dark, 0.35)}"/><stop offset="1" stop-color="${dark}"/></linearGradient>
+    <linearGradient id="${id}t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mix(light, '#ffffff', 0.15)}"/><stop offset="1" stop-color="${light}"/></linearGradient>
+    <linearGradient id="${id}b" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${bumper}"/><stop offset=".5" stop-color="${mix(bumper, '#ffffff', 0.08)}"/><stop offset="1" stop-color="${bumper}"/></linearGradient>
+    <linearGradient id="${id}gl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="${id}mt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eef0f3"/><stop offset=".5" stop-color="#a9aeb7"/><stop offset="1" stop-color="#6c717b"/></linearGradient>
+    <linearGradient id="${id}md" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9097a2"/><stop offset="1" stop-color="#4a4f58"/></linearGradient>
     <linearGradient id="m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f4f6fa"/><stop offset="1" stop-color="#9aa3b3"/></linearGradient>
     <linearGradient id="d" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a4457"/><stop offset="1" stop-color="#151a24"/></linearGradient>
-    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${accent}"/><stop offset="1" stop-color="${main}"/></linearGradient>
-    <filter id="${id}sh" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="7" flood-color="#000" flood-opacity=".6"/></filter>
-    <filter id="${id}ws" x="-20%" y="-20%" width="140%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000" flood-opacity=".7"/></filter>
+    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${accent}"/><stop offset="1" stop-color="${mix(accent, main, 0.5)}"/></linearGradient>
+    <filter id="${id}bl" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+    <filter id="${id}r" x="-10%" y="-10%" width="120%" height="120%"><feFlood flood-color="#ff2d55"/><feComposite in2="SourceAlpha" operator="in"/></filter>
+    <filter id="${id}c" x="-10%" y="-10%" width="120%" height="120%"><feFlood flood-color="#19e3ff"/><feComposite in2="SourceAlpha" operator="in"/></filter>
+    <clipPath id="${id}clip"><path d="M36 30 H224 Q230 30 234 36 L244 50 V173 Q244 182 235 182 H25 Q16 182 16 173 V50 L26 36 Q30 30 36 30 Z"/></clipPath>
+    <clipPath id="${id}st"><rect x="64" y="105" width="132" height="62" rx="6"/></clipPath>
+    <clipPath id="${id}s1"><rect x="0" y="112" width="260" height="7"/></clipPath>
+    <clipPath id="${id}s2"><rect x="0" y="140" width="260" height="5"/></clipPath>
   </defs>
-  <ellipse cx="128" cy="112" rx="124" ry="78" fill="url(#${id}g)"/>
-  <g filter="url(#${id}sh)">
-    <!-- side -->
-    <path d="M200 58 L238 36 V144 L200 170 Z" fill="url(#${id}s)"/>
-    <path d="M206 70 L232 55 M206 150 L232 134" stroke="#000" stroke-opacity=".35" stroke-width="4"/>
-    <rect x="212" y="90" width="16" height="30" rx="3" transform="skewY(-30) translate(0 124)" fill="#000" fill-opacity=".35"/>
-    <!-- lid -->
-    <path d="M20 58 L200 58 L238 36 L60 36 Z" fill="url(#${id}t)"/>
-    <path d="M20 58 L200 58 L238 36" stroke="#fff" stroke-opacity=".35" stroke-width="1.3"/>
-    <path d="M58 52 L210 52 M72 44 L226 44" stroke="#000" stroke-opacity=".18" stroke-width="3"/>
-    <!-- front -->
-    <rect x="20" y="58" width="180" height="112" rx="3" fill="url(#${id}f)"/>
-    <rect x="20" y="58" width="180" height="10" fill="#000" fill-opacity=".3"/>
-    ${hazardBand}
-    <rect x="20" y="58" width="12" height="112" fill="#000" fill-opacity=".25"/>
-    <rect x="188" y="58" width="12" height="112" fill="#000" fill-opacity=".3"/>
-    <!-- panel with weapon -->
-    <rect x="42" y="76" width="136" height="68" rx="4" fill="url(#${id}p)" stroke="${accent}" stroke-opacity=".45" stroke-width="1.2"/>
-    <path d="M46 80 h18 M46 80 v10 M174 140 h-18 M174 140 v-10" stroke="${accent}" stroke-opacity=".8" stroke-width="1.6"/>
-    <g transform="${knifeArt[art] ? 'translate(38 56) scale(.74) rotate(-14 100 70)' : 'translate(47 74) scale(.63)'}" filter="url(#${id}ws)">${weapon}</g>
-    ${scratches}
-    ${rivets}
-    <!-- latches -->
-    <rect x="44" y="50" width="20" height="26" rx="2.5" fill="url(#${id}m)"/><rect x="49" y="66" width="10" height="6" rx="1" fill="#2e281c"/>
-    <rect x="156" y="50" width="20" height="26" rx="2.5" fill="url(#${id}m)"/><rect x="161" y="66" width="10" height="6" rx="1" fill="#2e281c"/>
-    <!-- padlock -->
-    <rect x="102" y="60" width="16" height="13" rx="2" fill="url(#${id}m)"/><path d="M105 60 v-4 a5 5 0 0 1 10 0 v4" stroke="url(#${id}m)" stroke-width="2.4" fill="none"/>
-    <text x="110" y="${hazard ? 184 : 162}" opacity="${hazard ? 0 : 1}" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="9" letter-spacing="3" fill="#000" fill-opacity=".45">GRADERUP</text>
-    <rect x="20" y="58" width="180" height="112" rx="3" stroke="#fff" stroke-opacity=".12"/>
+  <ellipse cx="130" cy="186" rx="112" ry="9" fill="#000" fill-opacity=".55" filter="url(#${id}bl)"/>
+  <!-- side handles -->
+  <rect x="7" y="110" width="12" height="28" rx="3.5" fill="#15171b"/><rect x="9" y="113" width="3" height="22" rx="1.5" fill="#fff" fill-opacity=".08"/>
+  <rect x="241" y="110" width="12" height="28" rx="3.5" fill="#15171b"/>
+  <!-- lid top -->
+  <path d="M36 30 H224 Q230 30 234 36 L244 50 H16 L26 36 Q30 30 36 30 Z" fill="url(#${id}t)"/>
+  <path d="M30 34 H230" stroke="#fff" stroke-opacity=".35" stroke-width="1"/>
+  <rect x="92" y="35" width="10" height="8" rx="2" fill="#1e2024"/><rect x="158" y="35" width="10" height="8" rx="2" fill="#1e2024"/>
+  <rect x="98" y="33" width="64" height="9" rx="4.5" fill="#17191d"/><path d="M102 35 h56" stroke="#fff" stroke-opacity=".18" stroke-width="1.2"/>
+  <!-- front -->
+  <rect x="16" y="50" width="228" height="132" rx="9" fill="url(#${id}f)"/>
+  <rect x="16" y="50" width="228" height="48" rx="9" fill="#fff" fill-opacity=".05"/>
+  <path d="M40 64 H220 M40 90 H220" stroke="#000" stroke-opacity=".12" stroke-width="2"/>
+  <path d="M40 65.5 H220 M40 91.5 H220" stroke="#fff" stroke-opacity=".06" stroke-width="1"/>
+  ${tape}
+  <!-- seam -->
+  <rect x="16" y="97" width="228" height="6" fill="#000" fill-opacity=".45"/>
+  <path d="M16 103.8 H244" stroke="#fff" stroke-opacity=".16" stroke-width="1"/>
+  <path d="M40 170 H220" stroke="#000" stroke-opacity=".28" stroke-width="2"/><path d="M40 171.6 H220" stroke="#fff" stroke-opacity=".08" stroke-width="1"/>
+  <!-- bumpers -->
+  <rect x="16" y="50" width="20" height="132" rx="9" fill="url(#${id}b)"/>${ridges(16)}
+  <rect x="224" y="50" width="20" height="132" rx="9" fill="url(#${id}b)"/>${ridges(224)}
+  <!-- paper shipping label -->
+  <g transform="rotate(-2.5 180 70)">
+    <rect x="149" y="55" width="64" height="29" rx="1.5" fill="#000" fill-opacity=".25" transform="translate(1 1.5)"/>
+    <rect x="149" y="55" width="64" height="29" rx="1.5" fill="#eeece4"/>
+    <text x="153" y="62.5" font-family="Arial, sans-serif" font-weight="700" font-size="5.4" fill="#23262c">GRADERUP SUPPLY</text>
+    <path d="M153 66 h40 M153 69 h28" stroke="#23262c" stroke-opacity=".55" stroke-width="1.2"/>
+    ${barcode}
+    <text x="192" y="79" font-family="Arial, sans-serif" font-weight="700" font-size="5" fill="${mix(accent, '#000000', 0.35)}">${slug.slice(0, 3).toUpperCase()}-${String(100 + Math.floor(rnd() * 900))}</text>
   </g>
+  <!-- round patch -->
+  <circle cx="64" cy="74" r="12.5" fill="#000" fill-opacity=".3" transform="translate(1 1.5)"/>
+  <circle cx="64" cy="74" r="12.5" fill="${accent}"/><circle cx="64" cy="74" r="9.5" fill="#101318"/>
+  <path d="M64 67.5 L66 72 L70.8 72.3 L67.1 75.3 L68.3 80 L64 77.4 L59.7 80 L60.9 75.3 L57.2 72.3 L62 72 Z" fill="${accent}"/>
+  <!-- glitch weapon sticker -->
+  <rect x="64" y="105" width="132" height="62" rx="6" fill="#000" fill-opacity=".3" transform="translate(1.2 2)"/>
+  <rect x="64" y="105" width="132" height="62" rx="6" fill="#0d1015"/>
+  <g clip-path="url(#${id}st)">
+    <rect x="64" y="105" width="132" height="62" fill="${accent}" fill-opacity=".08"/>
+    ${Array.from({ length: 10 }, (_, i) => `<path d="M64 ${110 + i * 6} H196" stroke="#fff" stroke-opacity=".035"/>`).join('')}
+    <g transform="translate(-3 0)" opacity=".85"><g transform="${artTf}" filter="url(#${id}r)">${weapon}</g></g>
+    <g transform="translate(3 0)" opacity=".85"><g transform="${artTf}" filter="url(#${id}c)">${weapon}</g></g>
+    <g transform="${artTf}">${weapon}</g>
+    <g clip-path="url(#${id}s1)" transform="translate(7 0)"><g transform="${artTf}">${weapon}</g></g>
+    <g clip-path="url(#${id}s2)" transform="translate(-6 0)"><g transform="${artTf}">${weapon}</g></g>
+  </g>
+  <rect x="64" y="105" width="132" height="62" rx="6" stroke="${accent}" stroke-opacity=".8" stroke-width="1.6"/>
+  <path d="M69 110 h10 M69 110 v7 M191 162 h-10 M191 162 v-7" stroke="${accent}" stroke-width="1.6"/>
+  <!-- latches + padlock plate -->
+  ${latch(36)}${latch(198)}
+  <rect x="118" y="88" width="24" height="20" rx="3" fill="url(#${id}mt)"/>
+  <circle cx="130" cy="96" r="2.6" fill="#1b1d22"/><rect x="129" y="97" width="2" height="6" rx="1" fill="#1b1d22"/>
+  <!-- emboss -->
+  <text x="130.6" y="179.7" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7.5" letter-spacing="3" fill="#fff" fill-opacity=".12">GRADERUP</text>
+  <text x="130" y="179" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="7.5" letter-spacing="3" fill="#000" fill-opacity=".4">GRADERUP</text>
+  <g clip-path="url(#${id}clip)">${scratches}${chips}</g>
+  <rect x="16" y="50" width="228" height="132" rx="9" fill="url(#${id}gl)"/>
+  <rect x="16.5" y="50.5" width="227" height="131" rx="8.5" stroke="#fff" stroke-opacity=".14"/>
 </svg>
 `
   writeFileSync(join(root, 'cases', `${slug}.svg`), body)

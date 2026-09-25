@@ -63,8 +63,8 @@ export const settingSchemas = {
     inviteeBonusPercent: z.number().min(0).max(100),
   }),
   pricing: z.object({
-    /** none | skinport | steam | mock (PRICE_PROVIDER env overrides). */
-    provider: z.enum(['none', 'skinport', 'steam', 'mock']),
+    /** auto (market.csgo.com → Skinport) | marketcsgo | skinport | steam | mock | none (PRICE_PROVIDER env overrides). */
+    provider: z.enum(['none', 'auto', 'marketcsgo', 'skinport', 'steam', 'mock']),
     /** Markup applied to the market price, percent (can be negative). */
     markupPercent: z.number().min(-90).max(500),
     minPrice: z.number().min(0.01),
@@ -90,7 +90,7 @@ export const settingDefaults: { [K in SettingKey]: SettingValue<K> } = {
   cases: { rtp: 0.68, showOdds: false },
   drops: { wearWeights: { 'Factory New': 0.25, 'Minimal Wear': 22, 'Field-Tested': 42, 'Well-Worn': 6, 'Battle-Scarred': 29.75 } },
   referral: { inviteeBonusPercent: 5 },
-  pricing: { provider: 'none', markupPercent: 0, minPrice: 3 },
+  pricing: { provider: 'auto', markupPercent: 0, minPrice: 3 },
   site: { maintenance: false, announcement: '', showOnline: true },
 }
 

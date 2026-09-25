@@ -1,7 +1,7 @@
 import 'server-only'
 import { count, desc, eq, sql } from 'drizzle-orm'
 import { getDb } from '../db/client'
-import { caseOpenings, cases, items, sessions, upgrades, users } from '../db/schema'
+import { caseOpenings, cases, items, presence, sessions, upgrades, users } from '../db/schema'
 import { toItemDTO } from './mappers'
 import { skinWithdrawStats } from './skinWithdrawals'
 
@@ -48,6 +48,34 @@ export async function popularCaseIds(limit = 8) {
     .orderBy(desc(sql`count(${caseOpenings.id})`))
     .limit(limit)
   return rows.map((r) => r.id)
+}
+
+const touched = new Map<string, number>()
+let lastCleanup = 0
+/** Marks a visitor (guest or user) as present. DB write at most once a minute per visitor. */
+export async function touchVisitor(visitorId: string) {
+  const now = Date.now()
+  if ((touched.get(visitorId) ?? 0) > now - 60_000) return
+  touched.set(visitorId, now)
+  if (touched.size > 50_000) touched.clear()
+  const db = getDb()
+  await db.insert(presence).values({ visitorId }).onConflictDoUpdate({ target: presence.visitorId, set: { seenAt: sql`now()` } })
+  if (now - lastCleanup > 10 * 60_000) {
+    lastCleanup = now
+    await db.delete(presence).where(sql`${presence.seenAt} < now() - interval '1 day'`)
+  }
+}
+
+let visitorsCache: { at: number; n: number } | null = null
+/** Real online: distinct visitors (guests included) seen in the last 5 minutes (cached 15s). */
+export async function visitorsOnline() {
+  if (visitorsCache && Date.now() - visitorsCache.at < 15_000) return visitorsCache.n
+  const [r] = await getDb()
+    .select({ n: sql<number>`count(*)::int` })
+    .from(presence)
+    .where(sql`${presence.seenAt} > now() - interval '5 minutes'`)
+  visitorsCache = { at: Date.now(), n: r?.n ?? 0 }
+  return visitorsCache.n
 }
 
 let onlineCache: { at: number; n: number } | null = null

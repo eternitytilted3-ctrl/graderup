@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowDown, ArrowRight, Plus, TrendingUp, X, Zap } from 'lucide-react'
+import { Plus, X, Zap } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -81,6 +81,8 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   const [preview, setPreview] = useState<Preview | null>(null)
   const [state, setState] = useState<DialState>('idle')
   const [fast, setFast] = useState(false)
+  /** Chance of the last spin — the gauge keeps showing it (and where the needle landed) after the result. */
+  const [lastChance, setLastChance] = useState<number | null>(null)
   const [celebrate, setCelebrate] = useState<{ x: number; y: number; color: string } | null>(null)
   const dial = useRef<UpgradeDialHandle>(null)
   const dialBox = useRef<HTMLDivElement>(null)
@@ -164,11 +166,12 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   async function run() {
     if (!sources.length || !target || spinning) return
     dial.current?.reset()
+    setLastChance(preview ? Number(preview.chance) : null)
     setState('spinning')
     try {
       // The server decides the outcome first; the dial only visualizes the returned roll.
       const r = await api<UpgradeResultDTO>('/api/upgrade', { body: { userItemIds: sourceIds, targetItemId: target.id } })
-      await dial.current?.spin(r.rollFraction, { fast })
+      await dial.current?.spin(r.rollFraction, { fast, win: r.result === 'win' })
       setState(r.result)
       if (r.result === 'win') {
         sfx.success()
@@ -226,13 +229,24 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
 
       <section id="upgrade-panel" className="card grid scroll-mt-20 items-stretch gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8" aria-label="Апгрейд">
         <SourcesSlot sources={sources} onRemove={(id) => setSources((c) => c.filter((s) => s.id !== id))} disabled={spinning} state={state} />
-        <div className="flex flex-col items-center justify-center gap-4 py-2">
-          <ArrowRight className="hidden size-5 text-subtle lg:block" />
-          <ArrowDown className="size-5 text-subtle lg:hidden" />
+        <div className="flex flex-col items-center justify-center gap-3 py-2">
           <div ref={dialBox} className="flex w-full justify-center">
-            <UpgradeDial ref={dial} chance={chanceNum} state={state} />
+            <UpgradeDial ref={dial} chance={done || spinning ? lastChance : chanceNum} state={state} />
           </div>
-          <dl className="grid w-full max-w-[280px] grid-cols-2 gap-2 text-center text-xs">
+          {done ? (
+            <button onClick={reset} className="upgrade-btn w-full max-w-[340px]" data-variant="again">
+              Новый апгрейд
+            </button>
+          ) : authed ? (
+            <button onClick={run} disabled={!preview || spinning} className="upgrade-btn w-full max-w-[340px]" data-testid="upgrade-button" aria-busy={spinning}>
+              {spinning ? 'Крутим…' : preview ? `Апгрейд ×${preview.multiplier}` : 'Апгрейд'}
+            </button>
+          ) : (
+            <Link href="/login?next=/upgrade" className="upgrade-btn w-full max-w-[340px]">
+              Войдите для апгрейда
+            </Link>
+          )}
+          <dl className="grid w-full max-w-[340px] grid-cols-2 gap-2 text-center text-xs">
             <div className="rounded-md border border-border bg-bg px-2 py-2">
               <dt className="text-muted">Выигрыш</dt>
               <dd className="mt-0.5 font-display text-sm font-bold text-success tnum">{preview ? `+${formatMoney(preview.potentialWin)}` : '—'}</dd>
@@ -242,21 +256,6 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
               <dd className="mt-0.5 font-display text-sm font-bold text-danger tnum">{preview ? `−${formatMoney(preview.potentialLoss)}` : '—'}</dd>
             </div>
           </dl>
-          {done ? (
-            <Button size="lg" variant="secondary" onClick={reset} className="w-full max-w-[280px]">
-              Новый апгрейд
-            </Button>
-          ) : authed ? (
-            <Button size="lg" onClick={run} disabled={!preview} loading={spinning} className="w-full max-w-[280px]" data-testid="upgrade-button">
-              <TrendingUp className="size-4" /> {preview ? `Upgrade ×${preview.multiplier}` : 'Upgrade'}
-            </Button>
-          ) : (
-            <Link href="/login?next=/upgrade" className="w-full max-w-[280px]">
-              <Button size="lg" className="w-full">
-                Войдите для апгрейда
-              </Button>
-            </Link>
-          )}
           <label className="flex cursor-pointer items-center gap-2 text-sm text-muted select-none">
             <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} className="size-4 accent-[#7C5CFF]" data-testid="upgrade-fast" />
             <Zap className="size-3.5" /> Быстрая прокрутка

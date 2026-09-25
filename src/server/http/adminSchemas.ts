@@ -43,6 +43,8 @@ export const caseSchema = z.object({
   status: z.enum(['active', 'disabled']),
   sortOrder: z.number().int().min(0).max(10_000).optional(),
   isFeatured: z.boolean().optional(),
+  badge: z.enum(['limited', 'new', 'hot']).nullable().optional(),
+  endsAt: z.iso.datetime({ offset: true }).nullable().optional(),
   categoryId: z.uuid().nullable().optional(),
 })
 

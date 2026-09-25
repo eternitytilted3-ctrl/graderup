@@ -15,6 +15,9 @@ export interface CaseItemDTO extends ItemDTO {
   chance: string
 }
 
+export const CASE_BADGES = ['limited', 'new', 'hot'] as const
+export type CaseBadge = (typeof CASE_BADGES)[number]
+
 export interface CaseDTO {
   id: string
   name: string
@@ -24,6 +27,9 @@ export interface CaseDTO {
   price: string
   status: 'active' | 'disabled'
   isFeatured?: boolean
+  badge?: CaseBadge | null
+  /** ISO time the limited case ends (null = permanent). */
+  endsAt?: string | null
   categoryId?: string | null
   itemCount?: number
   topRarity?: Rarity

@@ -1,9 +1,9 @@
 import { and, count, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb, getDb } from '@/server/db/client'
-import { payments, userItems } from '@/server/db/schema'
+import { cases, payments, userItems } from '@/server/db/schema'
 import { getMockProvider } from '@/server/payments'
-import { openCase, openCases } from '@/server/services/cases'
+import { listCases, openCase, openCases } from '@/server/services/cases'
 import { listInventory, sellAllItems, sellItems } from '@/server/services/inventory'
 import { requestSkinWithdrawal, setTradeUrl, cancelSkinWithdrawal } from '@/server/services/skinWithdrawals'
 import { requestWithdrawal } from '@/server/services/withdrawals'
@@ -28,6 +28,18 @@ const settle = <T,>(ps: Promise<T>[]) => Promise.allSettled(ps)
 const ok = (rs: PromiseSettledResult<unknown>[]) => rs.filter((r) => r.status === 'fulfilled').length
 
 describe('case opening', () => {
+  it('limited case past its end is hidden and cannot be opened (balance untouched)', async () => {
+    const u = await createUser('10.00')
+    await getDb().update(cases).set({ endsAt: new Date(Date.now() - 1000) }).where(eq(cases.id, cat.case.id))
+    try {
+      await expect(openCase(u.id, cat.case.id)).rejects.toThrow(/истекло/)
+      expect((await listCases()).some((c) => c.id === cat.case.id)).toBe(false)
+      expect(await balanceOf(u.id)).toBe('10.00')
+    } finally {
+      await getDb().update(cases).set({ endsAt: null }).where(eq(cases.id, cat.case.id))
+    }
+  })
+
   it('debits price from DB, grants item, keeps ledger consistent', async () => {
     const u = await createUser('10.00')
     const r = await openCase(u.id, cat.case.id)

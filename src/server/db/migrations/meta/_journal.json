@@ -36,6 +36,20 @@
       "when": 1790260063286,
       "tag": "0004_item_withdrawals",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790294887773,
+      "tag": "0005_case_badges",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790295220349,
+      "tag": "0006_presence",
+      "breakpoints": true
     }
   ]
 }
