@@ -25,6 +25,7 @@
     "assets:generate": "node scripts/generate-assets.mjs",
     "prices:sync": "tsx --conditions=react-server scripts/sync-prices.ts",
     "skins:import": "tsx --conditions=react-server scripts/import-skins.ts",
+    "sim": "tsx --conditions=react-server scripts/simulate-activity.ts",
     "cases:rebuild": "tsx --conditions=react-server scripts/rebuild-cases.ts",
     "prices:update": "npm run prices:sync -- --provider=auto --reestimate && npm run cases:rebuild"
   },

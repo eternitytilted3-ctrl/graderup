@@ -160,6 +160,17 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec app np
 
 `deploy/setup-vps.sh` создаёт `.env.production` (gitignored) со случайными секретами и паролем администратора (`SEED_ADMIN_PASSWORD`), `SEED_DEMO=false` (без демо-пользователей и демо-дропов). Mock-платежи и mock-вывод скинов в production выключены — подключите реальные ключи Pally/AnyPay/xRocket в `.env.production` и выполните `bash deploy/update.sh`. Для HTTPS привяжите домен и поставьте TLS (например, Caddy/certbot) перед nginx, затем смените `APP_URL` на `https://…`.
 
+## Симуляция активности (только тест)
+
+`npm run sim` — боты (`bot_001…`, `@sim.graderup.local`) по-настоящему открывают кейсы, делают апгрейды, продают и выводят скины (через mock-провайдер) и держат присутствие онлайн. Онлайн, лента дропов и статистика растут от этих реальных действий в **тестовой** базе. С `NODE_ENV=production` скрипт не запускается.
+
+```bash
+npm run sim                              # 40 ботов, тик каждые 2 с, до Ctrl+C
+npm run sim -- --bots=80 --interval=1
+npm run sim -- --burst=2000              # быстро прогнать 2000 действий
+npm run sim -- --cleanup                 # «припарковать» ботов (бан)
+```
+
 ## Тесты
 
 - `tests/unit` — формула апгрейда, распределение, weighted pick, деньги, окна наград.
