@@ -74,10 +74,10 @@ export const UpgradeDial = forwardRef<UpgradeDialHandle, { chance: number | null
         if (opts.win && !inside) theta = Math.sign(theta || 1) * Math.max(0, edge - 0.5)
         if (!opts.win && inside) theta = Math.sign(theta || 1) * Math.min(180, edge + 0.5)
       }
-      const end = (opts?.fast ? 2 : 6) * 360 + (((theta % 360) + 360) % 360)
+      const end = (opts?.fast ? 2 : 8) * 360 + (((theta % 360) + 360) % 360)
       sfx.upgradeStart()
       const a = el.animate([{ transform: 'rotate(0deg)' }, { transform: `rotate(${end}deg)` }], {
-        duration: opts?.fast ? 1200 : 5200,
+        duration: opts?.fast ? 1200 : 7500,
         easing: 'cubic-bezier(0.1, 0.75, 0.08, 1)',
         fill: 'forwards',
       })
