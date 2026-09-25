@@ -1,10 +1,10 @@
 'use client'
 
 /* eslint-disable @next/next/no-img-element */
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { cn } from '@/lib/cn'
 import { sfx } from '@/lib/sound'
-import type { ItemDTO } from '@/lib/types'
+import type { ItemDTO, Rarity } from '@/lib/types'
 
 export interface RouletteHandle {
   /** Animates the (server-provided) reel so that `winIndex` stops under the marker. */
@@ -13,7 +13,8 @@ export interface RouletteHandle {
 }
 
 const GAP = 8
-const PAD = 8
+/** At most this many tiles are visible at once; fewer on narrow screens. */
+const MAX_VISIBLE = 7
 
 /** Decode reel images before spinning so nothing loads mid-animation (the main source of jank). */
 function preload(urls: string[], timeoutMs = 2500) {
@@ -25,7 +26,11 @@ function preload(urls: string[], timeoutMs = 2500) {
           const img = new Image()
           img.decoding = 'async'
           img.onload = () => {
-            if (img.decode) img.decode().then(() => resolve(), () => resolve())
+            if (img.decode)
+              img.decode().then(
+                () => resolve(),
+                () => resolve(),
+              )
             else resolve()
           }
           img.onerror = () => resolve()
@@ -41,23 +46,49 @@ function currentX(el: HTMLElement) {
   return m.m41
 }
 
+const BIG: Rarity[] = ['legendary', 'mythic']
+
 /**
  * Pure visualization: the winning item and reel come from the server response.
- * Uses the Web Animations API (compositor-driven, unaffected by CSS reduced-motion overrides).
+ * Big tiles (≤ 7 visible), motion blur while fast, the tile under the marker lights up, a short
+ * overshoot-and-settle at the end, rarity flash on landing. Web Animations API (compositor-driven).
  */
 export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[]; compact?: boolean; silent?: boolean }>(function Roulette({ idleItems, compact = false, silent = false }, ref) {
-  const CARD = compact ? 104 : 128
   const wrap = useRef<HTMLDivElement>(null)
   const track = useRef<HTMLDivElement>(null)
-  const anim = useRef<Animation | null>(null)
+  const anims = useRef<Animation[]>([])
+  const [card, setCard] = useState(compact ? 128 : 168)
+  const cardRef = useRef(card)
   const [items, setItems] = useState<ItemDTO[]>(() => [...idleItems, ...idleItems, ...idleItems].slice(0, 40))
   const [winner, setWinner] = useState<number | null>(null)
+  const [spinning, setSpinning] = useState(false)
+
+  // Tile width from the container: MAX_VISIBLE tiles on desktop, at least 3 on phones.
+  useEffect(() => {
+    const el = wrap.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      const vis = Math.min(MAX_VISIBLE, Math.max(3, Math.floor(w / (compact ? 118 : 150))))
+      const c = Math.floor((w - (vis - 1) * GAP) / vis)
+      cardRef.current = c
+      setCard(c)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [compact])
 
   const reset = useCallback(() => {
-    anim.current?.cancel()
-    anim.current = null
+    anims.current.forEach((a) => a.cancel())
+    anims.current = []
     setWinner(null)
-    if (track.current) track.current.style.transform = 'translate3d(0,0,0)'
+    setSpinning(false)
+    if (track.current) {
+      track.current.style.transform = 'translate3d(0,0,0)'
+      track.current.querySelectorAll('[data-active]').forEach((n) => n.removeAttribute('data-active'))
+    }
   }, [])
 
   const spin = useCallback(
@@ -68,26 +99,38 @@ export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[]; compa
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))
       const el = track.current
       if (!el) return
+      setSpinning(true)
+      const CARD = cardRef.current
       const w = wrap.current?.clientWidth ?? 800
-      const jitter = (Math.random() - 0.5) * CARD * 0.7 // cosmetic landing offset only
-      const target = PAD + winIndex * (CARD + GAP) + CARD / 2 - w / 2 + jitter
-      const duration = opts?.fast ? 900 : 6500
+      const jitter = (Math.random() - 0.5) * CARD * 0.6 // cosmetic landing offset only
+      const target = winIndex * (CARD + GAP) + CARD / 2 - w / 2 + jitter
+      const fast = Boolean(opts?.fast)
+      const duration = fast ? 1000 : 7200
+      // Overshoot a little past the landing spot, then settle back — the classic tense finish.
+      const overshoot = fast ? 0 : CARD * (0.18 + Math.random() * 0.12)
       if (!silent) sfx.caseOpen()
-      const a = el.animate([{ transform: 'translate3d(0,0,0)' }, { transform: `translate3d(${-target}px,0,0)` }], {
-        duration,
-        easing: 'cubic-bezier(0.08, 0.7, 0.1, 1)',
+      const main = el.animate([{ transform: 'translate3d(0,0,0)' }, { transform: `translate3d(${-(target + overshoot)}px,0,0)` }], {
+        duration: fast ? duration : duration - 700,
+        easing: 'cubic-bezier(0.06, 0.72, 0.12, 1)',
         fill: 'forwards',
       })
-      anim.current = a
-      // Tick each time a card crosses the centre marker.
+      const blur = el.animate([{ filter: 'blur(2.5px)' }, { filter: 'blur(1.5px)', offset: 0.35 }, { filter: 'blur(0px)', offset: 0.6 }, { filter: 'blur(0px)' }], {
+        duration: fast ? duration : duration - 700,
+        fill: 'forwards',
+      })
+      anims.current = [main, blur]
+      // Tick + highlight the tile under the marker (direct DOM, no React re-render per frame).
+      const tiles = el.children
       let last = -1
       let lastX = 0
       let raf = 0
       const loop = () => {
         const x = -currentX(el)
-        const idx = Math.floor((x + w / 2 - PAD) / (CARD + GAP))
+        const idx = Math.floor((x + w / 2) / (CARD + GAP))
         if (idx !== last) {
-          if (last !== -1 && !silent) sfx.tick(Math.abs(x - lastX) / 8)
+          if (last !== -1 && !silent) sfx.tick(Math.abs(x - lastX) / 10)
+          tiles[last]?.removeAttribute('data-active')
+          tiles[idx]?.setAttribute('data-active', '')
           last = idx
         }
         lastX = x
@@ -95,43 +138,81 @@ export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[]; compa
       }
       raf = requestAnimationFrame(loop)
       try {
-        await a.finished
+        await main.finished
+        if (overshoot) {
+          const settle = el.animate([{ transform: `translate3d(${-(target + overshoot)}px,0,0)` }, { transform: `translate3d(${-target}px,0,0)` }], {
+            duration: 700,
+            easing: 'cubic-bezier(0.45, 0, 0.2, 1)',
+            fill: 'forwards',
+          })
+          anims.current.push(settle)
+          await settle.finished
+        }
       } catch {
         // cancelled
       }
       cancelAnimationFrame(raf)
       el.style.transform = `translate3d(${-target}px,0,0)`
+      tiles[last]?.removeAttribute('data-active')
+      setSpinning(false)
       setWinner(winIndex)
       if (!silent) sfx.drop(reel[winIndex].rarity)
-      await new Promise((r) => setTimeout(r, 450))
+      await new Promise((r) => setTimeout(r, BIG.includes(reel[winIndex].rarity) ? 900 : 500))
     },
-    [reset, CARD, silent],
+    [reset, silent],
   )
 
   useImperativeHandle(ref, () => ({ reset, spin }), [reset, spin])
 
+  const won = winner !== null ? items[winner] : null
+  const tileH = Math.round(card * (compact ? 0.92 : 1.3))
+
   return (
-    <div ref={wrap} className="relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-bg-2 py-5 [contain:layout_paint]" aria-live="polite">
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-16 bg-gradient-to-r from-bg-2 to-transparent sm:w-32" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-16 bg-gradient-to-l from-bg-2 to-transparent sm:w-32" />
-      <div className="pointer-events-none absolute inset-y-2 left-1/2 z-20 w-0.5 -translate-x-1/2 rounded-full bg-gradient-to-b from-accent via-primary to-accent shadow-[0_0_14px_2px_rgb(0_212_255/0.55)]" />
-      <div className="pointer-events-none absolute top-0 left-1/2 z-20 -translate-x-1/2 border-x-[7px] border-t-[8px] border-x-transparent border-t-accent" />
-      <div ref={track} className="flex gap-2 [backface-visibility:hidden] will-change-transform" style={{ paddingLeft: PAD, transform: 'translate3d(0,0,0)' }}>
+    <div
+      ref={wrap}
+      data-rarity={won?.rarity}
+      className={cn('roulette relative overflow-hidden rounded-[var(--radius-xl)] border border-border bg-bg-2 py-4 [contain:layout_paint]', spinning && 'roulette-spinning', won && 'roulette-won', won && BIG.includes(won.rarity) && 'roulette-jackpot')}
+      aria-live="polite"
+    >
+      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-bg-2 to-transparent sm:w-20" />
+      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-bg-2 to-transparent sm:w-20" />
+      <div className="roulette-marker pointer-events-none absolute inset-y-1 left-1/2 z-20 w-[3px] -translate-x-1/2 rounded-full" />
+      <div className="pointer-events-none absolute top-0 left-1/2 z-20 -translate-x-1/2 border-x-[9px] border-t-[11px] border-x-transparent border-t-accent drop-shadow-[0_0_6px_rgb(0_212_255/0.8)]" />
+      <div className="pointer-events-none absolute bottom-0 left-1/2 z-20 -translate-x-1/2 border-x-[9px] border-b-[11px] border-x-transparent border-b-accent drop-shadow-[0_0_6px_rgb(0_212_255/0.8)]" />
+      <div ref={track} className="flex [backface-visibility:hidden] will-change-transform" style={{ gap: GAP, transform: 'translate3d(0,0,0)' }}>
         {items.map((it, i) => (
           <div
             key={`${it.id}-${i}`}
             data-rarity={it.rarity}
             className={cn(
-              compact ? 'slot-bg relative flex h-28 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border' : 'slot-bg relative flex h-36 shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border',
-              winner === i ? 'z-10 scale-105 border-[var(--r)] shadow-[0_0_28px_-4px_var(--r)] transition-transform duration-300' : 'border-border',
-              winner !== null && winner !== i && 'opacity-35 transition-opacity duration-300',
+              'reel-tile slot-bg relative flex shrink-0 flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border',
+              winner === i && 'reel-tile-win',
+              winner !== null && winner !== i && 'opacity-30 transition-opacity duration-300',
             )}
-            style={{ width: CARD }}
+            style={{ width: card, height: tileH }}
           >
-            <div className="absolute inset-0" style={{ background: 'radial-gradient(70% 60% at 50% 55%, color-mix(in srgb, var(--r) 26%, transparent), transparent 75%)' }} />
-            <img src={it.image} alt="" width={112} height={84} loading="eager" decoding="async" draggable={false} className={compact ? "relative h-12 w-auto max-w-[92px] object-contain" : "relative h-16 w-auto max-w-[112px] object-contain"} />
-            <div className="relative mt-2 w-full truncate px-2 text-center text-[11px] font-semibold">{it.name.split(' | ')[0]}</div>
-            <div className="relative w-full truncate px-2 text-center text-[10px] text-muted">{it.name.split(' | ')[1]}</div>
+            <div
+              className="absolute inset-0"
+              style={{
+                background: 'radial-gradient(75% 60% at 50% 50%, color-mix(in srgb, var(--r) 30%, transparent), transparent 75%)',
+              }}
+            />
+            <img
+              src={it.image}
+              alt=""
+              width={180}
+              height={135}
+              loading="eager"
+              decoding="async"
+              draggable={false}
+              className="relative w-auto object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.5)]"
+              style={{
+                height: Math.round(tileH * (compact ? 0.5 : 0.52)),
+                maxWidth: card - 16,
+              }}
+            />
+            <div className={cn('relative mt-1.5 w-full truncate px-2 text-center font-semibold', compact ? 'text-[11px]' : 'text-[13px]')}>{it.name.split(' | ')[0]}</div>
+            <div className={cn('relative w-full truncate px-2 text-center text-muted', compact ? 'text-[10px]' : 'text-[11.5px]')}>{it.name.split(' | ')[1]}</div>
             <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: 'var(--r)' }} />
           </div>
         ))}

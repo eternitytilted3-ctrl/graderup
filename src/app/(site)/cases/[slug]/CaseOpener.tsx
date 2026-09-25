@@ -31,18 +31,37 @@ function shuffled<T>(arr: T[], seed: number) {
   return a
 }
 
-export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slug: string; price: string; items: CaseItemDTO[] }) {
+type Phase = 'idle' | 'opening' | 'spinning' | 'done'
+
+/** Crate on its pedestal; shakes, flashes and bursts open when `phase` is 'opening'. */
+function CrateStage({ image, name, phase, fast }: { image: string; name: string; phase: Phase; fast: boolean }) {
+  return (
+    <div className="crate-stage relative flex h-60 items-center justify-center overflow-hidden rounded-[var(--radius-xl)] border border-border bg-bg-2 sm:h-72" data-phase={phase}>
+      <div className="crate-rays pointer-events-none absolute top-1/2 left-1/2 aspect-square w-[140%] -translate-x-1/2 -translate-y-1/2" />
+      <div className="pointer-events-none absolute inset-x-[25%] bottom-6 h-6 rounded-[50%] bg-black/60 blur-lg" />
+      <Image src={image} alt={`Кейс ${name}`} width={320} height={246} priority className={cn('relative h-48 w-auto drop-shadow-[0_24px_36px_rgba(0,0,0,0.55)] sm:h-60', phase === 'opening' ? (fast ? 'crate-opening-fast' : 'crate-opening') : 'crate-idle')} />
+      {phase === 'opening' && !fast && <div className="crate-flash pointer-events-none absolute top-1/2 left-1/2 size-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(closest-side,#fff,rgb(0_212_255/0.6)_40%,transparent)]" />}
+    </div>
+  )
+}
+
+export function CaseOpener({ caseId, slug, name, image, price, items }: { caseId: string; slug: string; name: string; image: string; price: string; items: CaseItemDTO[] }) {
   const { user, setBalance } = useSession()
   const toast = useToast()
   const [count, setCount] = useState<number>(1)
   const [reels, setReels] = useState(1)
   const handles = useRef<(RouletteHandle | null)[]>([])
   const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState<Phase>('idle')
   const [fast, setFast] = useState(false)
   const [result, setResult] = useState<OpenCasesResult | null>(null)
   const [sold, setSold] = useState<Set<string>>(new Set())
   const [selling, setSelling] = useState(false)
-  const [celebrate, setCelebrate] = useState<{ x: number; y: number; color: string } | null>(null)
+  const [celebrate, setCelebrate] = useState<{
+    x: number
+    y: number
+    color: string
+  } | null>(null)
   const onCelebrated = useCallback(() => setCelebrate(null), [])
   const idle = useMemo(() => COUNTS.map((_, i) => shuffled(items, i)), [items])
 
@@ -56,22 +75,34 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
     setSold(new Set())
     try {
       // 1. Server decides every result (and debits the balance) before any animation.
-      const r = await api<OpenCasesResult>(`/api/cases/${caseId}/open`, { body: { count: n } })
+      const r = await api<OpenCasesResult>(`/api/cases/${caseId}/open`, {
+        body: { count: n },
+      })
       setReels(n)
       setBalance(r.balance)
-      await new Promise((res) => requestAnimationFrame(res))
-      // 2. Animations only visualize the returned results.
+      // 2. Animations only visualize the returned results: crate bursts open, then the reels spin.
+      setPhase('opening')
+      sfx.crateUnlock()
+      await new Promise((res) => setTimeout(res, fast ? 350 : 1150))
+      setPhase('spinning')
+      await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))
       await Promise.all(r.results.map((drop, i) => handles.current[i]?.spin(drop.reel, drop.winIndex, { fast })))
+      setPhase('done')
       setResult(r)
       // "Окуп": at least one drop is worth more than the case → celebrate.
       const best = [...r.results].sort((a, b) => Number(b.item.price) - Number(a.item.price))[0]
       if (best && D(best.item.price).gt(price)) {
         sfx.success()
-        setCelebrate({ x: window.innerWidth / 2, y: window.innerHeight / 2, color: rarityColor[best.item.rarity] })
+        setCelebrate({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+          color: rarityColor[best.item.rarity],
+        })
       }
     } catch (err) {
       const e = err as ApiError
       toast.error(e.code === 'INSUFFICIENT_FUNDS' ? 'Недостаточно средств' : 'Не удалось открыть кейс', e.message)
+      setPhase('idle')
     } finally {
       setBusy(false)
     }
@@ -81,10 +112,7 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
     if (!ids.length) return
     setSelling(true)
     try {
-      const r =
-        ids.length === 1
-          ? await api<{ balance: string; amount: string }>(`/api/inventory/${ids[0]}/sell`, { method: 'POST' })
-          : await api<{ balance: string; amount: string }>('/api/inventory/sell', { body: { ids } })
+      const r = ids.length === 1 ? await api<{ balance: string; amount: string }>(`/api/inventory/${ids[0]}/sell`, { method: 'POST' }) : await api<{ balance: string; amount: string }>('/api/inventory/sell', { body: { ids } })
       setBalance(r.balance)
       sfx.coin()
       toast.success(`Продано за ${formatMoney(r.amount)}`)
@@ -104,16 +132,23 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
 
   return (
     <section aria-label="Открытие кейса">
-      <div className="space-y-2">
-        {COUNTS.slice(0, Math.max(reels, busy ? reels : count)).map((_, i) => (
-          <Roulette
-            key={i}
-            ref={(h) => {
-              handles.current[i] = h
-            }}
-            idleItems={idle[i]} compact={Math.max(reels, count) > 1} silent={i > 0} />
-        ))}
-      </div>
+      {phase === 'idle' || phase === 'opening' ? (
+        <CrateStage image={image} name={name} phase={phase} fast={fast} />
+      ) : (
+        <div className="roulette-enter flex min-h-60 flex-col justify-center space-y-2 sm:min-h-72">
+          {COUNTS.slice(0, reels).map((_, i) => (
+            <Roulette
+              key={i}
+              ref={(h) => {
+                handles.current[i] = h
+              }}
+              idleItems={idle[i]}
+              compact={reels > 1}
+              silent={i > 0}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="mt-5 flex flex-col items-center gap-3">
         <div className="flex items-center gap-1.5" role="radiogroup" aria-label="Количество кейсов">
@@ -125,13 +160,13 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
               disabled={busy}
               onClick={() => {
                 setCount(n)
-                if (!busy) setReels(n)
+                if (!busy) {
+                  setReels(n)
+                  setPhase('idle')
+                }
               }}
               data-testid={`count-${n}`}
-              className={cn(
-                'h-10 w-12 rounded-[var(--radius-md)] border font-display text-base font-semibold transition disabled:opacity-50',
-                count === n ? 'border-accent bg-accent/15 text-accent' : 'border-border bg-card text-muted hover:border-border-strong hover:text-text',
-              )}
+              className={cn('h-10 w-12 rounded-[var(--radius-md)] border font-display text-base font-semibold transition disabled:opacity-50', count === n ? 'border-accent bg-accent/15 text-accent' : 'border-border bg-card text-muted hover:border-border-strong hover:text-text')}
             >
               ×{n}
             </button>
@@ -170,7 +205,15 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
         )}
       </div>
 
-      <Modal open={Boolean(result) && remaining.length > 0} onClose={() => setResult(null)} title={remaining.length > 1 ? `Ваши дропы · ${remaining.length}` : 'Ваш дроп'} size={remaining.length > 2 ? 'lg' : 'sm'}>
+      <Modal
+        open={Boolean(result) && remaining.length > 0}
+        onClose={() => {
+          setResult(null)
+          setPhase('idle')
+        }}
+        title={remaining.length > 1 ? `Ваши дропы · ${remaining.length}` : 'Ваш дроп'}
+        size={remaining.length > 2 ? 'lg' : 'sm'}
+      >
         {result && (
           <div className="flex flex-col items-center text-center">
             <div className={cn('grid w-full gap-3', remaining.length === 1 ? 'grid-cols-1' : remaining.length === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3')}>
@@ -179,10 +222,7 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
                   key={d.userItemId}
                   data-rarity={d.item.rarity}
                   data-profit={D(d.item.price).gt(price) || undefined}
-                  className={cn(
-                    'slot-bg relative flex flex-col items-center overflow-hidden rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--r)_50%,transparent)] p-3',
-                    D(d.item.price).gt(price) && 'profit-card',
-                  )}
+                  className={cn('slot-bg relative flex flex-col items-center overflow-hidden rounded-[var(--radius-md)] border border-[color-mix(in_srgb,var(--r)_50%,transparent)] p-3', D(d.item.price).gt(price) && 'profit-card')}
                 >
                   {D(d.item.price).gt(price) && (
                     <span className="absolute top-2 left-2 z-10 rounded bg-success px-1.5 py-0.5 font-display text-[11px] font-bold tracking-wide text-[#05140c] uppercase" data-testid="profit-badge">
@@ -190,7 +230,12 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
                     </span>
                   )}
                   <div className="relative flex h-28 w-full items-center justify-center">
-                    <div className="absolute inset-0 animate-pop rounded-full" style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--r) 45%, transparent), transparent)' }} />
+                    <div
+                      className="absolute inset-0 animate-pop rounded-full"
+                      style={{
+                        background: 'radial-gradient(closest-side, color-mix(in srgb, var(--r) 45%, transparent), transparent)',
+                      }}
+                    />
                     <Image src={d.item.image} alt={d.item.name} width={200} height={140} className="relative h-24 w-auto animate-pop object-contain" />
                   </div>
                   <RarityBadge rarity={d.item.rarity} />
@@ -211,7 +256,12 @@ export function CaseOpener({ caseId, slug, price, items }: { caseId: string; slu
               <Button variant="secondary" onClick={() => sell(remaining.map((d) => d.userItemId))} loading={selling} data-testid="sell-all">
                 <Coins className="size-4" /> {remaining.length > 1 ? 'Продать всё' : 'Продать'} · {formatMoney(remainingSum.toFixed(2))}
               </Button>
-              <Button onClick={() => setResult(null)}>
+              <Button
+                onClick={() => {
+                  setResult(null)
+                  setPhase('idle')
+                }}
+              >
                 <PackageCheck className="size-4" /> В инвентарь
               </Button>
             </div>

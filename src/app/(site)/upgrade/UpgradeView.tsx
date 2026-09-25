@@ -9,6 +9,7 @@ import { ItemCard } from '@/components/domain/ItemCard'
 import { PageHeader } from '@/components/domain/PageHeader'
 import { rarityColor } from '@/components/domain/RarityBadge'
 import { UpgradeCard } from '@/components/domain/UpgradeCard'
+import { useSession } from '@/components/SessionProvider'
 import { UpgradeDial, type DialState, type UpgradeDialHandle } from '@/components/domain/UpgradeDial'
 import { WinCelebration } from '@/components/domain/WinCelebration'
 import { Button } from '@/components/ui/Button'
@@ -21,7 +22,7 @@ import { api, ApiError, qs } from '@/lib/api'
 import { cn } from '@/lib/cn'
 import { D, formatMoney } from '@/lib/money'
 import { sfx } from '@/lib/sound'
-import type { InventoryItemDTO, ItemDTO, Paginated, UpgradeResultDTO } from '@/lib/types'
+import type { InventoryItemDTO, ItemDTO, Paginated, UpgradeBonusDTO, UpgradeResultDTO } from '@/lib/types'
 import { useFetch } from '@/lib/useFetch'
 
 const MAX_SOURCES = 5
@@ -43,7 +44,9 @@ function SourcesSlot({ sources, onRemove, disabled, state }: { sources: Inventor
   return (
     <div className={cn('flex h-full min-h-52 flex-col rounded-[var(--radius-xl)] border bg-card p-4 transition', state === 'loss' ? 'border-danger/70 opacity-70' : 'border-border-strong')}>
       <div className="flex items-center justify-between">
-        <span className="label">Ваши предметы · {sources.length}/{MAX_SOURCES}</span>
+        <span className="label">
+          Ваши предметы · {sources.length}/{MAX_SOURCES}
+        </span>
       </div>
       <div className="mt-3 grid flex-1 grid-cols-3 gap-2">
         {sources.map((e) => (
@@ -73,9 +76,30 @@ function SourcesSlot({ sources, onRemove, disabled, state }: { sources: Inventor
   )
 }
 
-export function UpgradeView({ authed, config }: { authed: boolean; config: { minMultiplier: number; maxMultiplier: number } }) {
+interface PublicBonus {
+  chancePercent: number
+  zonePercent: number
+  refundMinPercent: number
+  refundMaxPercent: number
+  doubleMaxMultiplier: number
+}
+
+export function UpgradeView({
+  authed,
+  config,
+}: {
+  authed: boolean
+  config: {
+    minMultiplier: number
+    maxMultiplier: number
+    bonus: PublicBonus | null
+  }
+}) {
   const toast = useToast()
+  const { refresh: refreshSession } = useSession()
   const params = useSearchParams()
+  /** Bonus zone of the current / last spin (server-decided, revealed when the spin starts). */
+  const [bonus, setBonus] = useState<UpgradeBonusDTO | null>(null)
   const [sources, setSources] = useState<InventoryItemDTO[]>([])
   const [target, setTarget] = useState<ItemDTO | null>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
@@ -83,7 +107,11 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   const [fast, setFast] = useState(false)
   /** Chance of the last spin — the gauge keeps showing it (and where the needle landed) after the result. */
   const [lastChance, setLastChance] = useState<number | null>(null)
-  const [celebrate, setCelebrate] = useState<{ x: number; y: number; color: string } | null>(null)
+  const [celebrate, setCelebrate] = useState<{
+    x: number
+    y: number
+    color: string
+  } | null>(null)
   const dial = useRef<UpgradeDialHandle>(null)
   const dialBox = useRef<HTMLDivElement>(null)
   const [autoMode, setAutoMode] = useState<QuickMode | null>(null)
@@ -115,7 +143,10 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
     if (!idsKey || !target) return
     const c = new AbortController()
     const t = setTimeout(() => {
-      api<Preview>('/api/upgrade/preview', { body: { userItemIds: idsKey.split(','), targetItemId: target.id }, signal: c.signal })
+      api<Preview>('/api/upgrade/preview', {
+        body: { userItemIds: idsKey.split(','), targetItemId: target.id },
+        signal: c.signal,
+      })
         .then(setPreview)
         .catch((e: ApiError) => {
           if (e.name !== 'AbortError') toast.error('Недопустимая комбинация', e.message)
@@ -134,6 +165,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   function resetOutcome() {
     if (done) {
       setState('idle')
+      setBonus(null)
       dial.current?.reset()
     }
   }
@@ -166,17 +198,53 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
   async function run() {
     if (!sources.length || !target || spinning) return
     dial.current?.reset()
+    setBonus(null)
     setLastChance(preview ? Number(preview.chance) : null)
     setState('spinning')
     try {
-      // The server decides the outcome first; the dial only visualizes the returned roll.
-      const r = await api<UpgradeResultDTO>('/api/upgrade', { body: { userItemIds: sourceIds, targetItemId: target.id } })
-      await dial.current?.spin(r.rollFraction, { fast, win: r.result === 'win' })
+      // The server decides the outcome (and any bonus zone) first; the dial only visualizes the returned roll.
+      const r = await api<UpgradeResultDTO>('/api/upgrade', {
+        body: { userItemIds: sourceIds, targetItemId: target.id },
+      })
+      setLastChance(Number(r.chance))
+      if (r.bonus) {
+        setBonus(r.bonus)
+        sfx.bonus()
+      }
+      const bonusHit = r.bonus?.hit ?? false
+      await dial.current?.spin(r.rollFraction, {
+        fast,
+        win: r.result === 'win' && !bonusHit,
+      })
       setState(r.result)
-      if (r.result === 'win') {
+      const box = dialBox.current?.getBoundingClientRect()
+      if (bonusHit && r.bonus!.type === 'double') {
         sfx.success()
-        const box = dialBox.current?.getBoundingClientRect()
-        if (box) setCelebrate({ x: box.left + box.width / 2, y: box.top + box.height / 2, color: rarityColor[r.target.rarity] })
+        if (box)
+          setCelebrate({
+            x: box.left + box.width / 2,
+            y: box.top + box.height / 2,
+            color: '#ff4fd8',
+          })
+        toast.success('Бонус ×2!', `${r.target.name} выдан дважды`)
+      } else if (bonusHit && r.bonus!.type === 'refund') {
+        sfx.success()
+        if (box)
+          setCelebrate({
+            x: box.left + box.width / 2,
+            y: box.top + box.height / 2,
+            color: '#ffc93c',
+          })
+        toast.success('Страховка сработала!', `Вернули ${formatMoney(r.bonus!.refund)} на баланс`)
+        void refreshSession()
+      } else if (r.result === 'win') {
+        sfx.success()
+        if (box)
+          setCelebrate({
+            x: box.left + box.width / 2,
+            y: box.top + box.height / 2,
+            color: rarityColor[r.target.rarity],
+          })
         toast.success('Апгрейд успешен!', `${r.target.name} добавлен в инвентарь`)
       } else {
         sfx.fail()
@@ -213,6 +281,7 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
     setSources([])
     setTarget(null)
     setState('idle')
+    setBonus(null)
     dial.current?.reset()
   }
 
@@ -220,18 +289,13 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
 
   return (
     <div className="container-page">
-      <PageHeader
-        eyebrow="Upgrade"
-        title="Апгрейд предметов"
-        description={`Выберите до ${MAX_SOURCES} своих предметов и цель дороже минимум в ${config.minMultiplier}× их суммы. Чем выше множитель — тем ниже шанс.`}
-        actions={<SoundToggle />}
-      />
+      <PageHeader eyebrow="Upgrade" title="Апгрейд предметов" description={`Выберите до ${MAX_SOURCES} своих предметов и цель дороже минимум в ${config.minMultiplier}× их суммы. Чем выше множитель — тем ниже шанс.`} actions={<SoundToggle />} />
 
       <section id="upgrade-panel" className="card grid scroll-mt-20 items-stretch gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8" aria-label="Апгрейд">
         <SourcesSlot sources={sources} onRemove={(id) => setSources((c) => c.filter((s) => s.id !== id))} disabled={spinning} state={state} />
         <div className="flex flex-col items-center justify-center gap-3 py-2">
           <div ref={dialBox} className="flex w-full justify-center">
-            <UpgradeDial ref={dial} chance={done || spinning ? lastChance : chanceNum} state={state} />
+            <UpgradeDial ref={dial} chance={done || spinning ? lastChance : chanceNum} state={state} bonus={done || spinning ? bonus : null} />
           </div>
           {done ? (
             <button onClick={reset} className="upgrade-btn w-full max-w-[340px]" data-variant="again">
@@ -260,8 +324,27 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
             <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} className="size-4 accent-[#7C5CFF]" data-testid="upgrade-fast" />
             <Zap className="size-3.5" /> Быстрая прокрутка
           </label>
+          {config.bonus && (
+            <p className="max-w-[340px] text-center text-xs leading-relaxed text-muted" data-testid="upgrade-bonus-hint">
+              С шансом {config.bonus.chancePercent}% в проигрышной части появится бонус-зона {config.bonus.zonePercent}%: <span className="font-semibold text-[#ffc93c]">страховка</span> (вернём {config.bonus.refundMinPercent}–{config.bonus.refundMaxPercent}% ставки) или{' '}
+              <span className="font-semibold text-[#ff4fd8]">×2</span> (цель выдадим дважды, до ×{config.bonus.doubleMaxMultiplier}).
+            </p>
+          )}
         </div>
-        <UpgradeCard label="Цель" item={target} placeholder="Выберите цель из списка или кнопкой ниже" onClear={spinning ? undefined : () => { setTarget(null); resetOutcome() }} highlight={state === 'win' ? 'win' : null} />
+        <UpgradeCard
+          label="Цель"
+          item={target}
+          placeholder="Выберите цель из списка или кнопкой ниже"
+          onClear={
+            spinning
+              ? undefined
+              : () => {
+                  setTarget(null)
+                  resetOutcome()
+                }
+          }
+          highlight={state === 'win' ? 'win' : null}
+        />
       </section>
 
       <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6" role="group" aria-label="Быстрый выбор цели">
@@ -298,7 +381,15 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
             )}
           </h2>
           {!authed ? (
-            <EmptyState title="Войдите в аккаунт" description="Чтобы выбрать предметы для апгрейда, нужно войти." action={<Link href="/login?next=/upgrade"><Button>Войти</Button></Link>} />
+            <EmptyState
+              title="Войдите в аккаунт"
+              description="Чтобы выбрать предметы для апгрейда, нужно войти."
+              action={
+                <Link href="/login?next=/upgrade">
+                  <Button>Войти</Button>
+                </Link>
+              }
+            />
           ) : inv.error ? (
             <ErrorState description={inv.error.message} onRetry={inv.reload} />
           ) : !inv.data ? (
@@ -308,7 +399,15 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
               ))}
             </div>
           ) : inv.data.items.length === 0 ? (
-            <EmptyState title="Нет доступных предметов" description="Откройте кейс, чтобы получить предметы." action={<Link href="/cases"><Button>К кейсам</Button></Link>} />
+            <EmptyState
+              title="Нет доступных предметов"
+              description="Откройте кейс, чтобы получить предметы."
+              action={
+                <Link href="/cases">
+                  <Button>К кейсам</Button>
+                </Link>
+              }
+            />
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -326,8 +425,24 @@ export function UpgradeView({ authed, config }: { authed: boolean; config: { min
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-bold">Выберите цель</h2>
             <div className="flex w-full gap-2 sm:w-auto">
-              <Search value={tSearch} onChange={(v) => { setTSearch(v); setTPage(1) }} placeholder="Поиск" className="flex-1 sm:w-44" />
-              <select className="input h-10 w-auto" value={tSort} onChange={(e) => { setTSort(e.target.value as typeof tSort); setTPage(1) }} aria-label="Сортировка целей">
+              <Search
+                value={tSearch}
+                onChange={(v) => {
+                  setTSearch(v)
+                  setTPage(1)
+                }}
+                placeholder="Поиск"
+                className="flex-1 sm:w-44"
+              />
+              <select
+                className="input h-10 w-auto"
+                value={tSort}
+                onChange={(e) => {
+                  setTSort(e.target.value as typeof tSort)
+                  setTPage(1)
+                }}
+                aria-label="Сортировка целей"
+              >
                 <option value="price_asc">Дешевле</option>
                 <option value="price_desc">Дороже</option>
               </select>

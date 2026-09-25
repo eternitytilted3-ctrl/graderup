@@ -1,7 +1,8 @@
 import 'server-only'
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, gt, inArray, sql, type SQL } from 'drizzle-orm'
-import { D } from '@/lib/money'
+import Decimal from 'decimal.js'
+import { D, toMoney } from '@/lib/money'
 import type { Rarity, UpgradeResultDTO } from '@/lib/types'
 import { getDb, type Executor } from '../db/client'
 import { items, upgradeSources, upgrades, userItems } from '../db/schema'
@@ -11,11 +12,18 @@ import { applyBalanceChange, lockUser } from './ledger'
 import { logEvent } from './log'
 import { paginate, toItemDTO } from './mappers'
 import { getSetting, type SettingValue } from './settings'
-import { computeChance, isWinningRoll, ROLL_SCALE } from './upgradeFormula'
+import { bonusEdge, bonusHit, computeChance, isWinningRoll, planBonus, ROLL_SCALE } from './upgradeFormula'
 
 export { computeChance, isWinningRoll, ROLL_SCALE }
 
 export type UpgradeConfig = SettingValue<'upgrade'>
+type BonusConfig = SettingValue<'upgradeBonus'>
+
+/** Win chance with the bonus-zone EV folded into the edge (keeps the upgrade RTP unchanged). */
+function upgradeChance(sourceValue: string, targetPrice: string, cfg: UpgradeConfig, bonus: BonusConfig) {
+  const multiplier = D(targetPrice).div(sourceValue).toNumber()
+  return computeChance(sourceValue, targetPrice, { ...cfg, houseEdge: cfg.houseEdge + bonusEdge(multiplier, bonus) })
+}
 
 export const MAX_UPGRADE_SOURCES = 5
 
@@ -43,13 +51,13 @@ async function loadSources(ex: Executor, userId: string, ids: string[], lock: bo
 
 /** Validates sources/target and returns the server-computed chance (for preview). */
 export async function previewUpgrade(userId: string, userItemIds: string[], targetItemId: string) {
-  const cfg = await getSetting('upgrade')
+  const [cfg, bonusCfg] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
   const db = getDb()
   const { value } = await loadSources(db, userId, normalizeIds(userItemIds), false)
   const [target] = await db.select().from(items).where(and(eq(items.id, targetItemId), eq(items.isActive, true)))
   if (!target) throw Errors.notFound('Целевой предмет не найден')
   validatePair(value, target.price, cfg)
-  const chance = computeChance(value, target.price, cfg)
+  const chance = upgradeChance(value, target.price, cfg, bonusCfg)
   return {
     chance: chance.toFixed(2),
     sourceValue: value,
@@ -72,7 +80,7 @@ function validatePair(sourceValue: string, targetPrice: string, cfg: UpgradeConf
  * crypto roll → consume all sources → (win) grant target → upgrade + upgrade_sources + ledger.
  */
 export async function performUpgrade(userId: string, userItemIds: string[], targetItemId: string, ip?: string): Promise<UpgradeResultDTO> {
-  const cfg = await getSetting('upgrade')
+  const [cfg, bonusCfg] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
   const ids = normalizeIds(userItemIds)
   const db = getDb()
   const out = await db.transaction(async (tx) => {
@@ -83,9 +91,16 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
     if (!target) throw Errors.notFound('Целевой предмет не найден')
     validatePair(value, target.price, cfg)
 
-    const chance = computeChance(value, target.price, cfg)
+    const chance = upgradeChance(value, target.price, cfg, bonusCfg)
     const roll = secureRandomInt(ROLL_SCALE)
-    const win = isWinningRoll(roll, chance)
+    const baseWin = isWinningRoll(roll, chance)
+    // Bonus zone: decided together with the roll, always inside the losing range.
+    const threshold = chance.mul(ROLL_SCALE / 100).floor().toNumber()
+    const plan = planBonus(threshold, D(target.price).div(value).toNumber(), bonusCfg, secureRandomInt)
+    const hit = !baseWin && bonusHit(plan, roll)
+    const double = hit && plan!.type === 'double'
+    const refund = hit && plan!.type === 'refund' ? toMoney(D(value).mul(plan!.refundPercent).div(100), Decimal.ROUND_DOWN) : null
+    const win = baseWin || double
     const upgradeId = randomUUID()
 
     const consumed = await tx
@@ -96,9 +111,14 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
     if (consumed.length !== ids.length) throw Errors.conflict('Предмет уже использован', 'ITEM_UNAVAILABLE')
 
     let resultUserItemId: string | null = null
+    let extraUserItemId: string | null = null
     if (win) {
       resultUserItemId = randomUUID()
       await tx.insert(userItems).values({ id: resultUserItemId, userId, itemId: target.id, source: 'upgrade', sourceReference: upgradeId })
+    }
+    if (double) {
+      extraUserItemId = randomUUID()
+      await tx.insert(userItems).values({ id: extraUserItemId, userId, itemId: target.id, source: 'upgrade', sourceReference: upgradeId })
     }
     await tx.insert(upgrades).values({
       id: upgradeId,
@@ -112,14 +132,19 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
       chance: chance.toFixed(4),
       roll,
       result: win ? 'win' : 'loss',
+      bonusType: plan?.type ?? null,
+      bonusZoneStart: plan?.start ?? null,
+      bonusZoneSize: plan?.size ?? null,
+      bonusHit: hit,
+      bonusPayout: refund,
     })
     await tx.insert(upgradeSources).values(rows.map((r) => ({ upgradeId, userItemId: r.ui.id, itemId: r.item.id, value: r.item.price })))
     const sourceNames = rows.map((r) => r.item.name)
-    // Balance is not changed by an upgrade, but every operation is recorded in the ledger.
+    // Balance changes only on a refund-zone hit; every upgrade is still recorded in the ledger.
     await applyBalanceChange(tx, {
       userId,
       type: 'upgrade',
-      amount: 0,
+      amount: refund ?? 0,
       referenceType: 'upgrade',
       referenceId: upgradeId,
       meta: {
@@ -131,6 +156,7 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
         targetItemName: target.name,
         targetValue: target.price,
         itemName: win ? target.name : sourceNames.join(', '),
+        ...(plan ? { bonus: plan.type, bonusHit: hit, bonusPayout: refund } : {}),
       },
     })
     return {
@@ -143,9 +169,12 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
       sourceValue: value,
       target: toItemDTO(target),
       resultUserItemId,
+      bonus: plan
+        ? { type: plan.type, start: plan.start / ROLL_SCALE, size: plan.size / ROLL_SCALE, hit, refund, extraUserItemId }
+        : null,
     }
   })
-  void logEvent('upgrade', { userId, ip, details: { upgradeId: out.upgradeId, result: out.result, chance: out.chance, roll: out.roll, sources: ids } })
+  void logEvent('upgrade', { userId, ip, details: { upgradeId: out.upgradeId, result: out.result, chance: out.chance, roll: out.roll, sources: ids, bonus: out.bonus?.type ?? null, bonusHit: out.bonus?.hit ?? false } })
   return out
 }
 
@@ -171,8 +200,14 @@ export async function listUpgradeTargets(opts: { minPrice?: string; search?: str
 }
 
 export async function getUpgradeConfigPublic() {
-  const cfg = await getSetting('upgrade')
-  return { minMultiplier: cfg.minMultiplier, maxMultiplier: cfg.maxMultiplier, minChance: cfg.minChance, maxChance: cfg.maxChance }
+  const [cfg, b] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
+  return {
+    minMultiplier: cfg.minMultiplier,
+    maxMultiplier: cfg.maxMultiplier,
+    minChance: cfg.minChance,
+    maxChance: cfg.maxChance,
+    bonus: b.enabled && b.chancePercent > 0 ? { chancePercent: b.chancePercent, zonePercent: b.zonePercent, refundMinPercent: b.refundMinPercent, refundMaxPercent: b.refundMaxPercent, doubleMaxMultiplier: b.doubleMaxMultiplier } : null,
+  }
 }
 
 export type AutoTargetMode = 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75'
@@ -182,11 +217,13 @@ export type AutoTargetMode = 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75'
  * xN → source × N; cP → price that yields ≈P% chance with the current formula.
  */
 export async function autoTarget(userId: string, userItemIds: string[], mode: AutoTargetMode) {
-  const cfg = await getSetting('upgrade')
+  const [cfg, bonusCfg] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
   const db = getDb()
   const { value } = await loadSources(db, userId, normalizeIds(userItemIds), false)
   const src = D(value)
-  const desired = mode.startsWith('x') ? src.mul(Number(mode.slice(1))) : src.mul(1 - cfg.houseEdge).mul(100).div(Number(mode.slice(1)))
+  const pct = Number(mode.slice(1))
+  const edge = mode.startsWith('x') ? 0 : cfg.houseEdge + bonusEdge(((1 - cfg.houseEdge) * 100) / pct, bonusCfg)
+  const desired = mode.startsWith('x') ? src.mul(pct) : src.mul(1 - edge).mul(100).div(pct)
   const min = src.mul(cfg.minMultiplier)
   const max = src.mul(cfg.maxMultiplier)
   const clamped = desired.lt(min) ? min : desired.gt(max) ? max : desired

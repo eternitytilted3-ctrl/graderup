@@ -113,6 +113,20 @@ export const sfx = {
     tone(330, 0.35, { type: 'sawtooth', gain: 0.12, slideTo: 110 })
     tone(220, 0.5, { type: 'square', gain: 0.06, delay: 0.12, slideTo: 70 })
   },
+  /** Crate unlock: two latch clacks, a rising hum and a burst. */
+  crateUnlock: () => {
+    noise(0.05, 0.35)
+    tone(420, 0.06, { type: 'square', gain: 0.1 })
+    noise(0.05, 0.35, 0.16)
+    tone(380, 0.06, { type: 'square', gain: 0.1, delay: 0.16 })
+    tone(90, 0.7, { type: 'sawtooth', gain: 0.08, delay: 0.25, slideTo: 420 })
+    noise(0.45, 0.22, 0.85)
+    tone(880, 0.3, { type: 'triangle', gain: 0.14, delay: 0.9, slideTo: 1320 })
+  },
+  /** Bonus zone revealed on the upgrade dial. */
+  bonus: () => {
+    ;[988, 1319, 1760].forEach((f, i) => tone(f, 0.18, { type: 'triangle', gain: 0.16, delay: i * 0.06 }))
+  },
   coin: () => {
     tone(1318, 0.08, { type: 'square', gain: 0.1 })
     tone(1760, 0.18, { type: 'square', gain: 0.1, delay: 0.07 })

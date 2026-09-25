@@ -50,6 +50,13 @@
       "when": 1790295220349,
       "tag": "0006_presence",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790296463619,
+      "tag": "0007_upgrade_bonus",
+      "breakpoints": true
     }
   ]
 }

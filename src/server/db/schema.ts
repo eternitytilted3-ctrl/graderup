@@ -296,6 +296,13 @@ export const upgrades = pgTable(
     /** Roll in [0, 1_000_000). Win if roll < chance * 10_000. */
     roll: integer('roll').notNull(),
     result: upgradeResult('result').notNull(),
+    /** Bonus zone (refund | double) decided with the roll; null when none appeared. */
+    bonusType: varchar('bonus_type', { length: 16 }),
+    bonusZoneStart: integer('bonus_zone_start'),
+    bonusZoneSize: integer('bonus_zone_size'),
+    bonusHit: boolean('bonus_hit').notNull().default(false),
+    /** Coins returned by a refund zone hit. */
+    bonusPayout: money('bonus_payout'),
     createdAt: createdAt(),
   },
   (t) => [

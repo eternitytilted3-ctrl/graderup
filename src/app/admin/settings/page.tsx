@@ -10,7 +10,8 @@ import { api, ApiError } from '@/lib/api'
 import { useFetch } from '@/lib/useFetch'
 
 const DESCRIPTIONS: Record<string, string> = {
-  upgrade: 'Формула апгрейда: chance = clamp(source/target × (1 − houseEdge) × 100, minChance, maxChance). Множители ограничивают цели.',
+  upgrade: 'Формула апгрейда: chance = clamp(source/target × (1 − houseEdge − bonusEdge) × 100, minChance, maxChance). Множители ограничивают цели.',
+  upgradeBonus: 'Бонус-зона апгрейда: с шансом chancePercent% в проигрышной части появляется зона zonePercent% — «страховка» (возврат refundMin..refundMax% ставки) или «×2» (цель выдаётся дважды, до doubleMaxMultiplier×). Ожидаемая выплата бонуса автоматически учитывается в шансе, RTP не меняется.',
   inventory: 'sellRatio — доля стоимости предмета при продаже (0.1…1).',
   deposit: 'Лимиты и пресеты пополнения.',
   withdraw: 'Лимиты вывода и доступные способы. Также требуется FEATURE_WITHDRAW=true.',

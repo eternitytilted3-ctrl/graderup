@@ -19,6 +19,20 @@ export const settingSchemas = {
     minMultiplier: z.number().min(1).max(1000),
     maxMultiplier: z.number().min(1).max(100000),
   }),
+  upgradeBonus: z.object({
+    enabled: z.boolean(),
+    /** Probability that an upgrade gets a bonus zone, %. */
+    chancePercent: z.number().min(0).max(100),
+    /** Zone width, % of the dial. */
+    zonePercent: z.number().min(0.5).max(20),
+    /** Refund zone: share of the stake returned, % (lose 50–70% → 30..50). */
+    refundMinPercent: z.number().min(0).max(100),
+    refundMaxPercent: z.number().min(0).max(100),
+    /** Share of zones that are ×2 (target granted twice) instead of refund, %. */
+    doubleSharePercent: z.number().min(0).max(100),
+    /** ×2 zones only for upgrades up to this multiplier. */
+    doubleMaxMultiplier: z.number().min(1).max(1000),
+  }),
   inventory: z.object({
     /** Sell price = item price × sellRatio. */
     sellRatio: z.number().min(0.1).max(1),
@@ -82,6 +96,7 @@ export type SettingValue<K extends SettingKey> = z.infer<(typeof settingSchemas)
 
 export const settingDefaults: { [K in SettingKey]: SettingValue<K> } = {
   upgrade: { houseEdge: 0.08, minChance: 1, maxChance: 80, minMultiplier: 1.2, maxMultiplier: 100 },
+  upgradeBonus: { enabled: true, chancePercent: 5, zonePercent: 4, refundMinPercent: 30, refundMaxPercent: 50, doubleSharePercent: 50, doubleMaxMultiplier: 10 },
   inventory: { sellRatio: 0.95 },
   // Money is stored in coins (C). Deposits are charged in RUB, 1 C = 1 RUB.
   deposit: { minAmount: 100, maxAmount: 500000, presets: [300, 500, 1000, 2500, 5000, 10000], currency: 'RUB' },

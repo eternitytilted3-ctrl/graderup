@@ -97,6 +97,20 @@ export interface UpgradeResultDTO {
   sourceValue: string
   target: ItemDTO
   resultUserItemId: string | null
+  /** Bonus zone shown on the dial for this spin (decided with the roll), or null. */
+  bonus: UpgradeBonusDTO | null
+}
+
+export interface UpgradeBonusDTO {
+  type: 'refund' | 'double'
+  /** Zone on the dial in roll fractions: [start, start + size). */
+  start: number
+  size: number
+  hit: boolean
+  /** Refund hit: coins returned. */
+  refund: string | null
+  /** Double hit: id of the second copy of the target. */
+  extraUserItemId: string | null
 }
 
 export const RARITIES: Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic']

@@ -10,6 +10,7 @@ import { requestWithdrawal } from '@/server/services/withdrawals'
 import { createPayment, handleWebhook } from '@/server/services/payments'
 import { redeemPromocode } from '@/server/services/promocodes'
 import { claimReward } from '@/server/services/rewards'
+import { clearSettingsCache, setSetting, settingDefaults } from '@/server/services/settings'
 import { performUpgrade } from '@/server/services/upgrade'
 import { balanceOf, createCatalog, createUser, grantItems, ledgerConsistent, resetDb } from './helpers'
 
@@ -120,6 +121,50 @@ describe('multi-source upgrade', () => {
     const [a, b, c, d] = await grantItems(u.id, cat.cheap.id, 4)
     const rs = await settle([performUpgrade(u.id, [a, b], cat.pricey.id), performUpgrade(u.id, [b, c], cat.pricey.id), performUpgrade(u.id, [c, d], cat.pricey.id)])
     expect(ok(rs)).toBe(2) // {a,b} and {c,d} succeed, {b,c} conflicts
+    expect(await ledgerConsistent(u.id)).toBe(true)
+  })
+})
+
+describe('upgrade bonus zone', () => {
+  const setBonus = async (v: Partial<(typeof settingDefaults)['upgradeBonus']>) => {
+    await setSetting(getDb(), 'upgradeBonus', { ...settingDefaults.upgradeBonus, ...v }, null)
+    clearSettingsCache()
+  }
+  afterAll(() => setBonus({}))
+
+  it('refund zone: a hit returns 30–50% of the stake to the balance through the ledger', async () => {
+    await setBonus({ chancePercent: 100, zonePercent: 20, doubleSharePercent: 0 })
+    const u = await createUser('0.00')
+    let hit = null
+    for (let i = 0; i < 60 && !hit; i++) {
+      const [id] = await grantItems(u.id, cat.mid.id, 1) // 5.00 → 50.00 (×10)
+      const r = await performUpgrade(u.id, [id], cat.pricey.id)
+      expect(r.bonus?.type).toBe('refund')
+      if (r.bonus?.hit) hit = r
+      else expect(r.bonus!.refund).toBeNull()
+    }
+    expect(hit).not.toBeNull()
+    expect(hit!.result).toBe('loss')
+    expect(Number(hit!.bonus!.refund)).toBeGreaterThanOrEqual(1.5)
+    expect(Number(hit!.bonus!.refund)).toBeLessThanOrEqual(2.5)
+    expect(Number(await balanceOf(u.id))).toBeGreaterThanOrEqual(1.5)
+    expect(await ledgerConsistent(u.id)).toBe(true)
+  })
+
+  it('×2 zone: a hit grants the target twice', async () => {
+    await setBonus({ chancePercent: 100, zonePercent: 20, doubleSharePercent: 100 })
+    const u = await createUser('0.00')
+    let hit = null
+    for (let i = 0; i < 60 && !hit; i++) {
+      const [id] = await grantItems(u.id, cat.mid.id, 1)
+      const r = await performUpgrade(u.id, [id], cat.pricey.id)
+      if (r.bonus?.hit) hit = r
+    }
+    expect(hit).not.toBeNull()
+    expect(hit!.result).toBe('win')
+    expect(hit!.bonus!.extraUserItemId).toBeTruthy()
+    const [{ n }] = await getDb().select({ n: count() }).from(userItems).where(and(eq(userItems.userId, u.id), eq(userItems.itemId, cat.pricey.id), eq(userItems.sourceReference, hit!.upgradeId)))
+    expect(n).toBe(2)
     expect(await ledgerConsistent(u.id)).toBe(true)
   })
 })
