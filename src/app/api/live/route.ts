@@ -4,8 +4,9 @@ import { route } from '@/server/http/handler'
 import { recentDrops } from '@/server/services/cases'
 import { getSetting } from '@/server/services/settings'
 import { touchVisitor, visitorsOnline } from '@/server/services/stats'
+import { COOKIES } from '@/lib/cookies'
 
-const VID_COOKIE = 'gu_vid'
+const VID_COOKIE = COOKIES.visitor
 const VID_RE = /^[A-Za-z0-9_-]{16,32}$/
 let cache: { at: number; items: unknown; showOnline: boolean } | null = null
 

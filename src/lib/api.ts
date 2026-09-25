@@ -1,5 +1,7 @@
 'use client'
 
+import { COOKIES } from './cookies'
+
 /** Browser API client: adds CSRF + Idempotency-Key headers and normalizes errors. */
 export class ApiError extends Error {
   constructor(
@@ -30,7 +32,7 @@ export async function api<T = unknown>(
   const headers: Record<string, string> = { accept: 'application/json' }
   if (opts.body !== undefined) headers['content-type'] = 'application/json'
   if (method !== 'GET') {
-    headers['x-csrf-token'] = readCookie('gu_csrf')
+    headers['x-csrf-token'] = readCookie(COOKIES.csrf)
     headers['idempotency-key'] = opts.idempotencyKey ?? newIdempotencyKey()
   }
   let res: Response
@@ -67,7 +69,7 @@ export async function apiUpload<T = unknown>(path: string, form: FormData): Prom
     method: 'POST',
     body: form,
     credentials: 'same-origin',
-    headers: { accept: 'application/json', 'x-csrf-token': readCookie('gu_csrf'), 'idempotency-key': newIdempotencyKey() },
+    headers: { accept: 'application/json', 'x-csrf-token': readCookie(COOKIES.csrf), 'idempotency-key': newIdempotencyKey() },
   }).catch(() => {
     throw new ApiError(0, 'NETWORK', 'Нет соединения с сервером.')
   })

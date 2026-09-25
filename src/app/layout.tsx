@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   openGraph: { type: 'website', siteName, locale: 'ru_RU', url: siteUrl, title: `${siteName} — кейсы, апгрейд и инвентарь`, description: siteDescription },
   twitter: { card: 'summary_large_image', title: siteName, description: siteDescription },
-  robots: { index: true, follow: true },
+  robots: process.env.SITE_MODE === 'test' ? { index: false, follow: false } : { index: true, follow: true },
 }
 
 export const viewport: Viewport = {
@@ -33,6 +33,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="ru" className={`${inter.variable} ${oswald.variable}`}>
       <body>
+        {process.env.SITE_MODE === 'test' && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] bg-[repeating-linear-gradient(135deg,#ffb547_0_14px,#f59e0b_14px_28px)] px-3 py-1 text-center font-display text-[13px] font-bold tracking-wide text-[#1c1200] uppercase" role="status" data-testid="test-server-banner">
+            Тестовый сервер — игроки, онлайн и статистика здесь ненастоящие (боты), деньги тестовые
+          </div>
+        )}
         <SessionProvider initialUser={auth ? toPublicUser(auth.user) : null}>
           <ToastProvider>{children}</ToastProvider>
         </SessionProvider>

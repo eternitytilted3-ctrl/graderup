@@ -9,6 +9,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 COPY . .
+# Test server builds: separate cookie names (same host, other port) and SITE_MODE=test (banner, noindex).
+ARG NEXT_PUBLIC_COOKIE_PREFIX=gu
+ARG SITE_MODE=live
+ENV NEXT_PUBLIC_COOKIE_PREFIX=$NEXT_PUBLIC_COOKIE_PREFIX SITE_MODE=$SITE_MODE
 RUN npm run build
 
 ENV NODE_ENV=production

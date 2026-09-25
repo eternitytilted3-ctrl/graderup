@@ -160,7 +160,8 @@ test('admin: case editor warns on invalid probability, balance adjust is audited
   await expect(page.getByText(/Сумма вероятностей .* ≠ 100%/)).toBeVisible()
 
   await page.goto('/admin/users')
-  await page.getByText('lucky_fox').click()
+  await page.getByPlaceholder('username, email или ID').fill('lucky_fox')
+  await page.getByText('lucky_fox', { exact: true }).click()
   await page.fill('input[name=amount]', '3.50')
   await page.fill('input[name=reason]', 'E2E compensation')
   await page.getByRole('button', { name: 'Применить' }).click()

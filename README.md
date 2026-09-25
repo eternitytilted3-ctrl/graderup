@@ -171,6 +171,16 @@ npm run sim -- --burst=2000              # быстро прогнать 2000 д
 npm run sim -- --cleanup                 # «припарковать» ботов (бан)
 ```
 
+### Тестовый сервер рядом с живым (VPS)
+
+`bash deploy/setup-test.sh` поднимает отдельный стенд на порту 4556 (`docker-compose.test.yml`): своя база, свои cookie (`gut_*`), тестовые платежи и выводы, закрыт от поисковиков, внизу каждой страницы плашка «Тестовый сервер». Сервис `sim` всё время гоняет ботов (`npm run sim`).
+
+```bash
+docker compose -f docker-compose.test.yml --env-file .env.test-server logs -f sim   # что делают боты
+docker compose -f docker-compose.test.yml --env-file .env.test-server stop sim      # остановить ботов
+docker compose -f docker-compose.test.yml --env-file .env.test-server down -v       # удалить стенд целиком
+```
+
 ## Тесты
 
 - `tests/unit` — формула апгрейда, распределение, weighted pick, деньги, окна наград.

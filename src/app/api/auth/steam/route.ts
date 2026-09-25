@@ -4,6 +4,7 @@ import { Errors } from '@/server/http/errors'
 import { route } from '@/server/http/handler'
 import { RateLimits } from '@/server/security/rateLimit'
 import { randomToken } from '@/server/security/crypto'
+import { COOKIES } from '@/lib/cookies'
 
 const cookieOpts = { httpOnly: true, sameSite: 'lax' as const, path: '/api/auth/steam', maxAge: 600, secure: (process.env.APP_URL ?? '').startsWith('https://') }
 
@@ -13,10 +14,10 @@ export const GET = route({ rateLimit: RateLimits.login }, async ({ req }) => {
   if (!provider.isEnabled()) throw Errors.disabled('Вход через Steam не настроен')
   const state = randomToken(16)
   const res = NextResponse.redirect(provider.getAuthorizationUrl({ returnTo: '/', state }))
-  res.cookies.set('gu_oauth_state', state, cookieOpts)
+  res.cookies.set(COOKIES.oauthState, state, cookieOpts)
   const ref = req.nextUrl.searchParams.get('ref')
-  if (ref && /^[A-Za-z0-9]{3,16}$/.test(ref)) res.cookies.set('gu_ref', ref, cookieOpts)
+  if (ref && /^[A-Za-z0-9]{3,16}$/.test(ref)) res.cookies.set(COOKIES.ref, ref, cookieOpts)
   const next = req.nextUrl.searchParams.get('next')
-  if (next && next.startsWith('/') && !next.startsWith('//') && next.length < 200) res.cookies.set('gu_next', next, cookieOpts)
+  if (next && next.startsWith('/') && !next.startsWith('//') && next.length < 200) res.cookies.set(COOKIES.next, next, cookieOpts)
   return res
 })

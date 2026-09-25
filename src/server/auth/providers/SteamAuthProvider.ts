@@ -61,23 +61,46 @@ export class SteamAuthProvider implements RedirectAuthProvider {
 
     const steamId = match[1]
     const identity: ExternalIdentity = { provider: 'steam', providerUserId: steamId }
-    if (this.cfg.apiKey) {
-      try {
-        const r = await fetch(
-          `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(this.cfg.apiKey)}&steamids=${steamId}`,
-          { signal: AbortSignal.timeout(10_000) },
-        )
-        const data = (await r.json()) as { response?: { players?: { personaname?: string; avatarfull?: string }[] } }
-        const p = data.response?.players?.[0]
-        if (p) {
-          identity.username = p.personaname
-          identity.avatarUrl = p.avatarfull
-          identity.profile = { personaname: p.personaname }
-        }
-      } catch {
-        // Profile enrichment is optional.
-      }
+    const profile = await fetchSteamProfile(steamId, this.cfg.apiKey)
+    if (profile) {
+      identity.username = profile.name
+      identity.avatarUrl = profile.avatar
+      identity.profile = { personaname: profile.name, avatar: profile.avatar }
     }
     return identity
+  }
+}
+
+/** Only Steam's avatar CDN is accepted as an avatar URL. */
+const AVATAR_RE = /^https:\/\/(([a-z0-9-]+\.)+steamstatic\.com|steamcdn-a\.akamaihd\.net)\/[\w./-]+$/
+
+const cdata = (xml: string, tag: string) => {
+  const m = new RegExp(`<${tag}>\\s*(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([^<]*))\\s*</${tag}>`).exec(xml)
+  return (m?.[1] ?? m?.[2] ?? '').trim()
+}
+
+/**
+ * Public nickname + full-size avatar of a Steam account. Uses the Web API when STEAM_API_KEY is set,
+ * otherwise the public community profile XML (no key needed; works for public profiles).
+ * Best effort: returns null on any failure.
+ */
+export async function fetchSteamProfile(steamId: string, apiKey?: string): Promise<{ name?: string; avatar?: string } | null> {
+  if (!/^\d{17}$/.test(steamId)) return null
+  try {
+    if (apiKey) {
+      const r = await fetch(`https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(apiKey)}&steamids=${steamId}`, { signal: AbortSignal.timeout(8_000) })
+      const data = (await r.json()) as { response?: { players?: { personaname?: string; avatarfull?: string }[] } }
+      const p = data.response?.players?.[0]
+      if (p) return { name: p.personaname, avatar: p.avatarfull && AVATAR_RE.test(p.avatarfull) ? p.avatarfull : undefined }
+    }
+    const r = await fetch(`https://steamcommunity.com/profiles/${steamId}/?xml=1`, { headers: { accept: 'text/xml' }, signal: AbortSignal.timeout(8_000) })
+    if (!r.ok) return null
+    const xml = (await r.text()).slice(0, 200_000)
+    const name = cdata(xml, 'steamID')
+    const avatar = cdata(xml, 'avatarFull')
+    if (!name && !avatar) return null
+    return { name: name || undefined, avatar: AVATAR_RE.test(avatar) ? avatar : undefined }
+  } catch {
+    return null
   }
 }

@@ -6,9 +6,10 @@ import { env } from '@/config/env'
 import { getDb } from '../db/client'
 import { sessions, users } from '../db/schema'
 import { randomToken, sha256 } from '../security/crypto'
+import { COOKIES } from '@/lib/cookies'
 
-export const SESSION_COOKIE = 'gu_session'
-export const CSRF_COOKIE = 'gu_csrf'
+export const SESSION_COOKIE = COOKIES.session
+export const CSRF_COOKIE = COOKIES.csrf
 export const CSRF_HEADER = 'x-csrf-token'
 
 export type SessionUser = typeof users.$inferSelect

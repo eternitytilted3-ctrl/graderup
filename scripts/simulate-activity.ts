@@ -17,15 +17,16 @@ import { listUpgradeTargets, performUpgrade } from '../src/server/services/upgra
  * TEST-ONLY activity simulator: bot accounts (bot_001…, emails bot…@sim.graderup.local) really open
  * cases, upgrade, sell and withdraw skins (through the dev mock trade provider) and keep a presence
  * heartbeat. The online counter, live drops and stats then reflect this activity in the TEST database —
- * nothing on the site is faked. Refuses to run with NODE_ENV=production.
+ * nothing on the site is faked. Refuses to run on a live production server (allowed with SITE_MODE=test).
  *
  *   npm run sim                         # 40 bots, a tick every 2 s, until Ctrl+C
  *   npm run sim -- --bots=80 --interval=1
  *   npm run sim -- --burst=2000         # quickly run 2000 actions, then keep ticking
  *   npm run sim -- --cleanup            # ban/park the bot accounts (they stop showing up online)
  */
-if (process.env.NODE_ENV === 'production') {
-  console.error('simulate-activity: refused — NODE_ENV=production. Bots are for local/test databases only.')
+// Allowed locally (development) and on a labelled test server (SITE_MODE=test shows a banner on every page).
+if (process.env.NODE_ENV === 'production' && process.env.SITE_MODE !== 'test') {
+  console.error('simulate-activity: refused — this is a live (production) server. Bots are for local DBs or SITE_MODE=test only.')
   process.exit(1)
 }
 

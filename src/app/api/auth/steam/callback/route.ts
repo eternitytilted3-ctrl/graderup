@@ -8,6 +8,7 @@ import { safeEqual } from '@/server/security/crypto'
 import { RateLimits } from '@/server/security/rateLimit'
 import { userAgent } from '@/server/security/request'
 import { logEvent } from '@/server/services/log'
+import { COOKIES } from '@/lib/cookies'
 
 export const GET = route({ rateLimit: RateLimits.login }, async ({ req, ip }) => {
   const appUrl = env().APP_URL
@@ -18,17 +19,17 @@ export const GET = route({ rateLimit: RateLimits.login }, async ({ req, ip }) =>
   const provider = steamProvider()
   if (!provider.isEnabled()) return fail('disabled')
   const state = req.nextUrl.searchParams.get('state') ?? ''
-  const expected = req.cookies.get('gu_oauth_state')?.value ?? ''
+  const expected = req.cookies.get(COOKIES.oauthState)?.value ?? ''
   if (!state || !safeEqual(state, expected)) return fail('state')
   try {
     const identity = await provider.handleCallback(req.nextUrl)
-    const { userId, created } = await loginWithExternalIdentity(identity, req.cookies.get('gu_ref')?.value)
+    const { userId, created } = await loginWithExternalIdentity(identity, req.cookies.get(COOKIES.ref)?.value)
     const session = await createSession(userId, { ip, userAgent: userAgent(req) })
     void logEvent(created ? 'register' : 'login', { userId, ip, details: { provider: 'steam' } })
-    const next = req.cookies.get('gu_next')?.value
+    const next = req.cookies.get(COOKIES.next)?.value
     const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
     const res = NextResponse.redirect(`${appUrl}${safeNext}`)
-    for (const c of ['gu_oauth_state', 'gu_ref', 'gu_next']) res.cookies.set(c, '', { path: '/api/auth/steam', maxAge: 0 })
+    for (const c of [COOKIES.oauthState, COOKIES.ref, COOKIES.next]) res.cookies.set(c, '', { path: '/api/auth/steam', maxAge: 0 })
     return applyCookies(res, session.cookies)
   } catch (err) {
     return fail((err as Error).message.slice(0, 120))
