@@ -57,6 +57,13 @@
       "when": 1790296463619,
       "tag": "0007_upgrade_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790298622934,
+      "tag": "0008_upgrade_stake_schedule",
+      "breakpoints": true
     }
   ]
 }

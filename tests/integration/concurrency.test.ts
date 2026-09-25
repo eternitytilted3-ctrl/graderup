@@ -105,6 +105,20 @@ describe('multi-source upgrade', () => {
     expect(await ledgerConsistent(u.id)).toBe(true)
   })
 
+  it('balance can be added to the stake: debited through the ledger, counted in the chance', async () => {
+    const u = await createUser('10.00')
+    const [id] = await grantItems(u.id, cat.mid.id, 1) // 5.00 + 5.00 from balance = 10.00 → 50.00 (×5)
+    const r = await performUpgrade(u.id, [id], cat.pricey.id, undefined, '5.00')
+    expect(r.sourceValue).toBe('10.00')
+    expect(r.balanceStake).toBe('5.00')
+    const refund = Number(r.bonus?.refund ?? 0)
+    expect(Number(await balanceOf(u.id))).toBeCloseTo(5 + refund, 2)
+    expect(await ledgerConsistent(u.id)).toBe(true)
+    const [id2] = await grantItems(u.id, cat.mid.id, 1)
+    await expect(performUpgrade(u.id, [id2], cat.pricey.id, undefined, '999.00')).rejects.toMatchObject({ code: 'INSUFFICIENT_FUNDS' })
+    await expect(performUpgrade(u.id, [id2], cat.pricey.id, undefined, '-1')).rejects.toMatchObject({ status: 400 })
+  })
+
   it('rejects duplicates, >5 items and foreign items', async () => {
     const u = await createUser('12.00')
     const other = await createUser('2.00')
@@ -139,7 +153,7 @@ describe('upgrade bonus zone', () => {
   afterAll(() => setBonus({}))
 
   it('refund zone: a hit returns 30–50% of the stake to the balance through the ledger', async () => {
-    await setBonus({ chancePercent: 100, zonePercent: 20, doubleSharePercent: 0 })
+    await setBonus({ minInterval: 1, maxInterval: 1, zonePercent: 20, doubleSharePercent: 0 })
     const u = await createUser('0.00')
     let hit = null
     for (let i = 0; i < 60 && !hit; i++) {
@@ -158,7 +172,7 @@ describe('upgrade bonus zone', () => {
   })
 
   it('×2 zone: a hit grants the target twice', async () => {
-    await setBonus({ chancePercent: 100, zonePercent: 20, doubleSharePercent: 100 })
+    await setBonus({ minInterval: 1, maxInterval: 1, zonePercent: 20, doubleSharePercent: 100 })
     const u = await createUser('0.00')
     let hit = null
     for (let i = 0; i < 60 && !hit; i++) {

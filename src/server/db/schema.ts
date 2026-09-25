@@ -71,6 +71,9 @@ export const users = pgTable(
     failedLoginCount: integer('failed_login_count').notNull().default(0),
     lockedUntil: timestamp('locked_until', { withTimezone: true }),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+    /** Upgrade bonus-zone cycle: eligible upgrades left in the cycle / until its bonus spin (server-only). */
+    upgradeBonusCycle: integer('upgrade_bonus_cycle').notNull().default(0),
+    upgradeBonusIn: integer('upgrade_bonus_in').notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -289,7 +292,10 @@ export const upgrades = pgTable(
       .notNull()
       .references(() => items.id, { onDelete: 'restrict' }),
     resultUserItemId: uuid('result_user_item_id').references(() => userItems.id, { onDelete: 'set null' }),
+    /** Total stake: items + balanceStake. */
     sourceValue: money('source_value').notNull(),
+    /** Coins added from the balance to raise the chance. */
+    balanceStake: money('balance_stake').notNull().default('0'),
     targetValue: money('target_value').notNull(),
     /** Chance in percent, 0..100 with 4 decimals. */
     chance: numeric('chance', { precision: 7, scale: 4 }).notNull(),

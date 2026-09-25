@@ -1,8 +1,9 @@
 'use client'
 
-import Image from 'next/image'
+/* eslint-disable @next/next/no-img-element */
 import { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/cn'
+import { Crate3D, has3D } from './Crate3D'
 
 export type CratePhase = 'idle' | 'opening' | 'spinning' | 'done'
 
@@ -33,15 +34,18 @@ interface Particle {
 function dissolve(img: HTMLImageElement, canvas: HTMLCanvasElement, duration: number) {
   return new Promise<void>((resolve) => {
     const dpr = Math.min(2, window.devicePixelRatio || 1)
-    const w = img.clientWidth
-    const h = img.clientHeight
+    // Visual box of the (possibly CSS-translated) image, relative to the canvas' positioned parent.
+    const r = img.getBoundingClientRect()
+    const pr = (canvas.offsetParent ?? canvas.parentElement!).getBoundingClientRect()
+    const w = Math.round(r.width)
+    const h = Math.round(r.height)
     const pad = Math.round(h * 0.6) // room for particles to rise above the crate
     canvas.width = Math.round((w + pad) * dpr)
     canvas.height = Math.round((h + pad) * dpr)
     canvas.style.width = `${w + pad}px`
     canvas.style.height = `${h + pad}px`
-    canvas.style.left = `${img.offsetLeft - pad / 2}px`
-    canvas.style.top = `${img.offsetTop - pad}px`
+    canvas.style.left = `${r.left - pr.left - pad / 2}px`
+    canvas.style.top = `${r.top - pr.top - pad}px`
     const ctx = canvas.getContext('2d')
     if (!ctx) return resolve()
 
@@ -147,23 +151,13 @@ export function CrateStage({ image, name, phase, fast }: { image: string; name: 
   return (
     <div className="crate-stage relative flex h-60 items-center justify-center overflow-hidden rounded-[var(--radius-xl)] border border-border bg-bg-2 sm:h-72" data-phase={phase}>
       <div className={cn('crate-rays pointer-events-none absolute top-1/2 left-1/2 aspect-square w-[140%] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-500', step === 'vapour' || step === 'gone' ? 'opacity-0' : 'opacity-100')} />
-      <div className={cn('pointer-events-none absolute inset-x-[25%] bottom-6 h-6 rounded-[50%] bg-black/60 blur-lg transition-opacity duration-700', (step === 'vapour' || step === 'gone') && 'opacity-0')} />
       <div className={cn('crate-core-glow pointer-events-none absolute top-1/2 left-1/2 size-64 rounded-full', step === 'vapour' && 'crate-core-glow-on')} />
-      <Image
-        ref={img}
-        src={image}
-        alt={`Кейс ${name}`}
-        width={320}
-        height={246}
-        priority
-        className={cn(
-          'relative h-48 w-auto drop-shadow-[0_24px_36px_rgba(0,0,0,0.55)] sm:h-60',
-          step === 'idle' && 'crate-idle',
-          step === 'shake' && 'crate-shake',
-          (step === 'vapour' || step === 'gone') && 'invisible',
-        )}
-      />
-      <canvas ref={canvas} className="pointer-events-none absolute" aria-hidden />
+      <div className="relative w-[300px] sm:w-[380px]">
+        <Crate3D image={image} alt={`Кейс ${name}`} still={step !== 'idle'} className={cn(step === 'shake' && 'crate-shake', (step === 'vapour' || step === 'gone') && 'invisible')} />
+        {/* Flat 3/4 render of the same crate, used as the pixel source for the dissolve. */}
+        <img ref={img} src={image} alt="" aria-hidden draggable={false} className={cn('pointer-events-none invisible absolute top-1/2 left-1/2 max-w-none -translate-x-1/2 -translate-y-1/2', has3D(image) ? 'w-[102%]' : 'w-[88%]')} />
+        <canvas ref={canvas} className="pointer-events-none absolute" aria-hidden />
+      </div>
     </div>
   )
 }

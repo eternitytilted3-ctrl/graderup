@@ -5,14 +5,14 @@ import Decimal from 'decimal.js'
 import { D, toMoney } from '@/lib/money'
 import type { Rarity, UpgradeResultDTO } from '@/lib/types'
 import { getDb, type Executor } from '../db/client'
-import { items, upgradeSources, upgrades, userItems } from '../db/schema'
+import { items, upgradeSources, upgrades, userItems, users } from '../db/schema'
 import { Errors } from '../http/errors'
 import { secureRandomInt } from '../security/crypto'
 import { applyBalanceChange, lockUser } from './ledger'
 import { logEvent } from './log'
 import { paginate, toItemDTO } from './mappers'
 import { getSetting, type SettingValue } from './settings'
-import { bonusEdge, bonusHit, computeChance, isWinningRoll, planBonus, ROLL_SCALE } from './upgradeFormula'
+import { advanceBonusSchedule, bonusEdge, bonusEligible, bonusHit, computeChance, isWinningRoll, planBonus, ROLL_SCALE } from './upgradeFormula'
 
 export { computeChance, isWinningRoll, ROLL_SCALE }
 
@@ -20,9 +20,17 @@ export type UpgradeConfig = SettingValue<'upgrade'>
 type BonusConfig = SettingValue<'upgradeBonus'>
 
 /** Win chance with the bonus-zone EV folded into the edge (keeps the upgrade RTP unchanged). */
-function upgradeChance(sourceValue: string, targetPrice: string, cfg: UpgradeConfig, bonus: BonusConfig) {
-  const multiplier = D(targetPrice).div(sourceValue).toNumber()
-  return computeChance(sourceValue, targetPrice, { ...cfg, houseEdge: cfg.houseEdge + bonusEdge(multiplier, bonus) })
+function upgradeChance(stake: string, targetPrice: string, cfg: UpgradeConfig, bonus: BonusConfig) {
+  const multiplier = D(targetPrice).div(stake).toNumber()
+  return computeChance(stake, targetPrice, { ...cfg, houseEdge: cfg.houseEdge + bonusEdge(multiplier, bonus, Number(stake)) })
+}
+
+/** Validates the coins a player adds from the balance to the stake (string money, 0..maxBalanceStake). */
+function normalizeBalanceStake(amount: string | undefined, cfg: UpgradeConfig) {
+  const v = D(amount || '0')
+  if (v.isNaN() || v.isNegative() || v.decimalPlaces() > 2) throw Errors.badRequest('Некорректная сумма с баланса')
+  if (v.gt(0) && v.gt(cfg.maxBalanceStake)) throw Errors.badRequest(`С баланса можно добавить не больше ${cfg.maxBalanceStake} C`)
+  return v.toFixed(2)
 }
 
 export const MAX_UPGRADE_SOURCES = 5
@@ -50,10 +58,12 @@ async function loadSources(ex: Executor, userId: string, ids: string[], lock: bo
 }
 
 /** Validates sources/target and returns the server-computed chance (for preview). */
-export async function previewUpgrade(userId: string, userItemIds: string[], targetItemId: string) {
+export async function previewUpgrade(userId: string, userItemIds: string[], targetItemId: string, balanceAmount?: string) {
   const [cfg, bonusCfg] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
   const db = getDb()
-  const { value } = await loadSources(db, userId, normalizeIds(userItemIds), false)
+  const extra = normalizeBalanceStake(balanceAmount, cfg)
+  const loaded = await loadSources(db, userId, normalizeIds(userItemIds), false)
+  const value = D(loaded.value).plus(extra).toFixed(2)
   const [target] = await db.select().from(items).where(and(eq(items.id, targetItemId), eq(items.isActive, true)))
   if (!target) throw Errors.notFound('Целевой предмет не найден')
   validatePair(value, target.price, cfg)
@@ -64,6 +74,7 @@ export async function previewUpgrade(userId: string, userItemIds: string[], targ
     targetValue: target.price,
     potentialWin: target.price,
     potentialLoss: value,
+    balanceStake: extra,
     multiplier: D(target.price).div(value).toDecimalPlaces(2).toString(),
   }
 }
@@ -79,13 +90,18 @@ function validatePair(sourceValue: string, targetPrice: string, cfg: UpgradeConf
  * lock user → lock & verify all sources (owned, available) → target from DB → chance on the SUM →
  * crypto roll → consume all sources → (win) grant target → upgrade + upgrade_sources + ledger.
  */
-export async function performUpgrade(userId: string, userItemIds: string[], targetItemId: string, ip?: string): Promise<UpgradeResultDTO> {
+export async function performUpgrade(userId: string, userItemIds: string[], targetItemId: string, ip?: string, balanceAmount?: string): Promise<UpgradeResultDTO> {
   const [cfg, bonusCfg] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
   const ids = normalizeIds(userItemIds)
   const db = getDb()
   const out = await db.transaction(async (tx) => {
-    await lockUser(tx, userId)
-    const { rows, value } = await loadSources(tx, userId, ids, true)
+    const user = await lockUser(tx, userId)
+    const extra = normalizeBalanceStake(balanceAmount, cfg)
+    // Early check for a clear error; the ledger re-checks under the same lock.
+    if (D(user.balance).lt(extra)) throw Errors.insufficientFunds()
+    const loaded = await loadSources(tx, userId, ids, true)
+    const rows = loaded.rows
+    const value = D(loaded.value).plus(extra).toFixed(2) // total stake
 
     const [target] = await tx.select().from(items).where(and(eq(items.id, targetItemId), eq(items.isActive, true)))
     if (!target) throw Errors.notFound('Целевой предмет не найден')
@@ -94,9 +110,15 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
     const chance = upgradeChance(value, target.price, cfg, bonusCfg)
     const roll = secureRandomInt(ROLL_SCALE)
     const baseWin = isWinningRoll(roll, chance)
-    // Bonus zone: decided together with the roll, always inside the losing range.
+    // Bonus zone: once per cycle of minInterval..maxInterval eligible upgrades (per-user, server-side),
+    // decided together with the roll and always inside the losing range.
     const threshold = chance.mul(ROLL_SCALE / 100).floor().toNumber()
-    const plan = planBonus(threshold, D(target.price).div(value).toNumber(), bonusCfg, secureRandomInt)
+    let plan = null
+    if (bonusEligible(bonusCfg, Number(value))) {
+      const { due, next } = advanceBonusSchedule({ cycleLeft: user.upgradeBonusCycle, bonusIn: user.upgradeBonusIn }, bonusCfg, secureRandomInt)
+      await tx.update(users).set({ upgradeBonusCycle: next.cycleLeft, upgradeBonusIn: next.bonusIn }).where(eq(users.id, userId))
+      if (due) plan = planBonus(threshold, D(target.price).div(value).toNumber(), bonusCfg, secureRandomInt)
+    }
     const hit = !baseWin && bonusHit(plan, roll)
     const double = hit && plan!.type === 'double'
     const refund = hit && plan!.type === 'refund' ? toMoney(D(value).mul(plan!.refundPercent).div(100), Decimal.ROUND_DOWN) : null
@@ -128,6 +150,7 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
       targetItemId: target.id,
       resultUserItemId,
       sourceValue: value,
+      balanceStake: extra,
       targetValue: target.price,
       chance: chance.toFixed(4),
       roll,
@@ -140,11 +163,11 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
     })
     await tx.insert(upgradeSources).values(rows.map((r) => ({ upgradeId, userItemId: r.ui.id, itemId: r.item.id, value: r.item.price })))
     const sourceNames = rows.map((r) => r.item.name)
-    // Balance changes only on a refund-zone hit; every upgrade is still recorded in the ledger.
+    // Balance: − coins added to the stake, + refund-zone payout. Every upgrade is recorded in the ledger.
     await applyBalanceChange(tx, {
       userId,
       type: 'upgrade',
-      amount: refund ?? 0,
+      amount: D(refund ?? 0).minus(extra).toFixed(2),
       referenceType: 'upgrade',
       referenceId: upgradeId,
       meta: {
@@ -153,6 +176,7 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
         sourceItemName: sourceNames.length > 1 ? `${sourceNames.length} предм.` : sourceNames[0],
         sourceItems: sourceNames,
         sourceValue: value,
+        balanceStake: extra,
         targetItemName: target.name,
         targetValue: target.price,
         itemName: win ? target.name : sourceNames.join(', '),
@@ -167,6 +191,7 @@ export async function performUpgrade(userId: string, userItemIds: string[], targ
       rollFraction: roll / ROLL_SCALE,
       sources: rows.map((r) => toItemDTO(r.item)),
       sourceValue: value,
+      balanceStake: extra,
       target: toItemDTO(target),
       resultUserItemId,
       bonus: plan
@@ -200,30 +225,42 @@ export async function listUpgradeTargets(opts: { minPrice?: string; search?: str
 }
 
 export async function getUpgradeConfigPublic() {
-  const [cfg, b] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
+  const cfg = await getSetting('upgrade')
   return {
     minMultiplier: cfg.minMultiplier,
     maxMultiplier: cfg.maxMultiplier,
     minChance: cfg.minChance,
     maxChance: cfg.maxChance,
-    bonus: b.enabled && b.chancePercent > 0 ? { chancePercent: b.chancePercent, zonePercent: b.zonePercent, refundMinPercent: b.refundMinPercent, refundMaxPercent: b.refundMaxPercent, doubleMaxMultiplier: b.doubleMaxMultiplier } : null,
+    quickMultipliers: cfg.quickMultipliers,
+    quickChances: cfg.quickChances,
+    maxBalanceStake: cfg.maxBalanceStake,
   }
 }
 
-export type AutoTargetMode = 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75'
+/** `x<N>` — target ≈ stake × N; `c<N>` — target that gives ≈ N% chance (e.g. x1.5, x33, c50). */
+export const AUTO_TARGET_MODE_RE = /^([xc])(\d{1,6}(?:\.\d{1,2})?)$/
 
 /**
  * Picks the active item whose price is closest to the desired target:
- * xN → source × N; cP → price that yields ≈P% chance with the current formula.
+ * xN → stake × N; cN → price that yields ≈N% chance with the current formula (bonus edge included).
  */
-export async function autoTarget(userId: string, userItemIds: string[], mode: AutoTargetMode) {
+export async function autoTarget(userId: string, userItemIds: string[], mode: string, balanceAmount?: string) {
   const [cfg, bonusCfg] = await Promise.all([getSetting('upgrade'), getSetting('upgradeBonus')])
+  const m = AUTO_TARGET_MODE_RE.exec(mode)
+  if (!m) throw Errors.badRequest('Некорректный режим')
+  const n = Number(m[2])
   const db = getDb()
-  const { value } = await loadSources(db, userId, normalizeIds(userItemIds), false)
-  const src = D(value)
-  const pct = Number(mode.slice(1))
-  const edge = mode.startsWith('x') ? 0 : cfg.houseEdge + bonusEdge(((1 - cfg.houseEdge) * 100) / pct, bonusCfg)
-  const desired = mode.startsWith('x') ? src.mul(pct) : src.mul(1 - edge).mul(100).div(pct)
+  const extra = normalizeBalanceStake(balanceAmount, cfg)
+  const loaded = await loadSources(db, userId, normalizeIds(userItemIds), false)
+  const src = D(loaded.value).plus(extra)
+  let desired: Decimal
+  if (m[1] === 'x') {
+    desired = src.mul(n)
+  } else {
+    if (n <= 0 || n > 100) throw Errors.badRequest('Некорректный шанс')
+    const edge = cfg.houseEdge + bonusEdge(((1 - cfg.houseEdge) * 100) / n, bonusCfg, src.toNumber())
+    desired = src.mul(1 - edge).mul(100).div(n)
+  }
   const min = src.mul(cfg.minMultiplier)
   const max = src.mul(cfg.maxMultiplier)
   const clamped = desired.lt(min) ? min : desired.gt(max) ? max : desired

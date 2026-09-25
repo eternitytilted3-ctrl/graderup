@@ -25,7 +25,7 @@ export function UpgradeCard({ label, item, placeholder, onClear, highlight }: { 
         <>
           <div className="relative flex flex-1 items-center justify-center py-3">
             <div className="absolute inset-0" style={{ background: 'radial-gradient(closest-side, color-mix(in srgb, var(--r) 30%, transparent), transparent)' }} />
-            <Image src={item.image} alt={item.name} width={200} height={140} className="relative h-24 w-auto animate-pop" />
+            <Image src={item.image} alt={item.name} width={320} height={240} className="relative h-36 w-auto max-w-full animate-pop object-contain drop-shadow-[0_10px_18px_rgba(0,0,0,0.55)] sm:h-44" />
           </div>
           <RarityBadge rarity={item.rarity} />
           <div className="mt-1 truncate text-sm font-semibold" title={item.name}>

@@ -18,11 +18,20 @@ export const settingSchemas = {
     /** Target price must be at least source × minMultiplier and at most source × maxMultiplier. */
     minMultiplier: z.number().min(1).max(1000),
     maxMultiplier: z.number().min(1).max(100000),
+    /** Quick-pick buttons on the upgrade page: target = stake × N. */
+    quickMultipliers: z.array(z.number().min(1.01).max(100000)).min(1).max(6).default([2, 5, 10]),
+    /** Quick-pick buttons: target that gives ≈ N% chance. */
+    quickChances: z.array(z.number().min(0.01).max(100)).min(1).max(6).default([30, 50, 75]),
+    /** Coins from the balance a player may add to the stake (0 = disabled). */
+    maxBalanceStake: z.number().min(0).max(10_000_000).default(100000),
   }),
   upgradeBonus: z.object({
     enabled: z.boolean(),
-    /** Probability that an upgrade gets a bonus zone, %. */
-    chancePercent: z.number().min(0).max(100),
+    /** A bonus zone appears once per cycle of minInterval..maxInterval upgrades (random spin inside). */
+    minInterval: z.number().int().min(1).max(1000).default(6),
+    maxInterval: z.number().int().min(1).max(1000).default(15),
+    /** Upgrades with a stake above this (coins) get no bonus zone and do not advance the cycle. */
+    maxStake: z.number().min(0).max(10_000_000).default(5000),
     /** Zone width, % of the dial. */
     zonePercent: z.number().min(0.5).max(20),
     /** Refund zone: share of the stake returned, % (lose 50–70% → 30..50). */
@@ -95,8 +104,8 @@ export type SettingKey = keyof typeof settingSchemas
 export type SettingValue<K extends SettingKey> = z.infer<(typeof settingSchemas)[K]>
 
 export const settingDefaults: { [K in SettingKey]: SettingValue<K> } = {
-  upgrade: { houseEdge: 0.08, minChance: 1, maxChance: 80, minMultiplier: 1.2, maxMultiplier: 100 },
-  upgradeBonus: { enabled: true, chancePercent: 5, zonePercent: 4, refundMinPercent: 30, refundMaxPercent: 50, doubleSharePercent: 50, doubleMaxMultiplier: 10 },
+  upgrade: { houseEdge: 0.08, minChance: 1, maxChance: 80, minMultiplier: 1.2, maxMultiplier: 100, quickMultipliers: [2, 5, 10], quickChances: [30, 50, 75], maxBalanceStake: 100000 },
+  upgradeBonus: { enabled: true, minInterval: 6, maxInterval: 15, maxStake: 5000, zonePercent: 4, refundMinPercent: 30, refundMaxPercent: 50, doubleSharePercent: 50, doubleMaxMultiplier: 10 },
   inventory: { sellRatio: 0.95 },
   // Money is stored in coins (C). Deposits are charged in RUB, 1 C = 1 RUB.
   deposit: { minAmount: 100, maxAmount: 500000, presets: [300, 500, 1000, 2500, 5000, 10000], currency: 'RUB' },

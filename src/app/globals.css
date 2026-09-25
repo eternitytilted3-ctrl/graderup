@@ -471,3 +471,229 @@ body {
     transform: none;
   }
 }
+
+/* ─── Upgrade: quick-pick buttons, balance stake ───────────────────────── */
+.quick-btn {
+  position: relative;
+  height: 2.6rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-strong);
+  background: linear-gradient(180deg, #1a2130 0%, #121822 100%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--color-text);
+  transition:
+    transform 0.12s,
+    border-color 0.15s,
+    box-shadow 0.15s,
+    color 0.15s;
+}
+.quick-btn[data-kind='x']:hover:not(:disabled) {
+  border-color: rgb(124 92 255 / 0.8);
+  color: #b9a8ff;
+  box-shadow:
+    0 0 0 1px rgb(124 92 255 / 0.35),
+    0 8px 20px -10px rgb(124 92 255 / 0.9),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+.quick-btn[data-kind='c']:hover:not(:disabled) {
+  border-color: rgb(0 212 255 / 0.8);
+  color: #7fe9ff;
+  box-shadow:
+    0 0 0 1px rgb(0 212 255 / 0.3),
+    0 8px 20px -10px rgb(0 212 255 / 0.9),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+.quick-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.98);
+}
+.quick-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.chip-btn {
+  height: 1.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-2);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-muted);
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.chip-btn:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: rgb(124 92 255 / 0.6);
+  background: rgb(124 92 255 / 0.12);
+}
+.chip-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.stake-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c5cff 0%, #00d4ff var(--p, 0%), #202938 var(--p, 0%));
+  outline: none;
+}
+.stake-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #7c5cff;
+  box-shadow: 0 0 10px rgb(124 92 255 / 0.8);
+  cursor: pointer;
+}
+.stake-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #7c5cff;
+  cursor: pointer;
+}
+.stake-range:disabled {
+  opacity: 0.4;
+}
+
+/* ─── CSS-3D crate (see Crate3D.tsx). Box 240×140×110 → 72cqw × 42cqw × 33cqw of the container. ─── */
+.crate3d {
+  container-type: inline-size;
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  place-items: center;
+  perspective: 1100px;
+}
+.crate3d-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 9%;
+  width: 70cqw;
+  height: 11cqw;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.6), transparent);
+  transition:
+    transform 0.6s,
+    opacity 0.6s;
+}
+.crate3d-sway,
+.crate3d-box {
+  position: relative;
+  width: 72cqw;
+  height: 42cqw;
+  transform-style: preserve-3d;
+}
+.crate3d-sway {
+  animation: crate-sway 7s ease-in-out infinite;
+}
+.crate3d-still {
+  animation: none;
+}
+@keyframes crate-sway {
+  0%,
+  100% {
+    transform: translateY(0) rotateY(0deg);
+  }
+  50% {
+    transform: translateY(-2.5cqw) rotateY(9deg);
+  }
+}
+.crate3d-box {
+  transform: rotateX(-20deg) rotateY(-28deg);
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.crate3d-face {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background-size: 100% 100%;
+  backface-visibility: hidden;
+}
+.crate3d-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.crate3d-front {
+  width: 72cqw;
+  height: 42cqw;
+  margin: -21cqw 0 0 -36cqw;
+  transform: translateZ(16.5cqw);
+  overflow: hidden;
+}
+/* Light sweep across the front on hover. */
+.crate3d-front::after {
+  background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.35) 50%, transparent 65%);
+  transform: translateX(-120%);
+  transition: transform 0s;
+}
+.crate3d-back {
+  width: 72cqw;
+  height: 42cqw;
+  margin: -21cqw 0 0 -36cqw;
+  transform: rotateY(180deg) translateZ(16.5cqw);
+  background: #15181e;
+}
+.crate3d-right,
+.crate3d-left {
+  width: 33cqw;
+  height: 42cqw;
+  margin: -21cqw 0 0 -16.5cqw;
+}
+.crate3d-right {
+  transform: rotateY(90deg) translateZ(36cqw);
+}
+.crate3d-left {
+  transform: rotateY(-90deg) translateZ(36cqw);
+}
+.crate3d-right::after {
+  background: linear-gradient(90deg, rgb(0 0 0 / 0.22), rgb(0 0 0 / 0.42));
+}
+.crate3d-left::after {
+  background: rgb(0 0 0 / 0.45);
+}
+.crate3d-top {
+  width: 72cqw;
+  height: 33cqw;
+  margin: -16.5cqw 0 0 -36cqw;
+  transform: rotateX(90deg) translateZ(21cqw);
+}
+.crate3d-top::after {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent);
+}
+.crate3d-bottom {
+  width: 72cqw;
+  height: 33cqw;
+  margin: -16.5cqw 0 0 -36cqw;
+  transform: rotateX(-90deg) translateZ(21cqw);
+  background: #0c0e12;
+}
+/* Case tile hover: the crate turns towards the viewer and lifts. */
+.case-card:hover .crate3d-box {
+  transform: rotateX(-13deg) rotateY(-12deg) translateY(-3cqw) scale(1.05);
+}
+.case-card:hover .crate3d-front::after {
+  transform: translateX(120%);
+  transition: transform 0.9s ease-out;
+}
+.case-card:hover .crate3d-shadow {
+  transform: scale(0.85);
+  opacity: 0.7;
+}
+.crate-stage:hover .crate3d-box {
+  transform: rotateX(-13deg) rotateY(-14deg) translateY(-2cqw) scale(1.04);
+}

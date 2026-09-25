@@ -31,14 +31,18 @@ export function isWinningRoll(roll: number, chancePercent: Decimal): boolean {
 
 // ─── Bonus zone ─────────────────────────────────────────────────────────────
 /**
- * With `chancePercent` probability an upgrade gets a bonus zone of `zonePercent` of the dial, placed at a
- * random spot of the LOSING part. If the (same, single) server roll lands in it:
+ * Once per cycle of `minInterval..maxInterval` upgrades (random length, bonus on a random spin inside
+ * the cycle — so it is not predictable) an upgrade gets a bonus zone of `zonePercent` of the dial,
+ * placed at a random spot of the LOSING part. If the (same, single) server roll lands in it:
  *   refund → the player gets `refundMin..refundMax`% of the stake back in coins (loses 50–70% instead of 100%);
  *   double → the target skin is granted twice (only offered up to `doubleMaxMultiplier`×).
+ * Upgrades with a stake above `maxStake` neither advance the cycle nor get a zone.
  */
 export interface UpgradeBonusConfig {
   enabled: boolean
-  chancePercent: number
+  minInterval: number
+  maxInterval: number
+  maxStake: number
   zonePercent: number
   refundMinPercent: number
   refundMaxPercent: number
@@ -57,27 +61,50 @@ export interface BonusPlan {
   refundPercent: number
 }
 
+/** Per-user cycle state: spins left in the current cycle and spins until its bonus spin. */
+export interface BonusSchedule {
+  cycleLeft: number
+  bonusIn: number
+}
+
 /** Distance kept between the bonus zone and the winning arc (1% of the dial). */
 const BONUS_MARGIN = ROLL_SCALE / 100
 
 const doubleAllowed = (multiplier: number, b: UpgradeBonusConfig) => multiplier <= b.doubleMaxMultiplier && b.doubleSharePercent > 0
+
+export const bonusEligible = (b: UpgradeBonusConfig, stake: number) => b.enabled && b.maxInterval >= 1 && stake <= b.maxStake
+
+/** Long-run share of eligible upgrades that get a zone: 1 / E[cycle length]. */
+export const bonusFrequency = (b: UpgradeBonusConfig) => 2 / (Math.max(1, b.minInterval) + Math.max(1, b.maxInterval, b.minInterval))
 
 /**
  * Expected bonus payout as a share of the stake. Added to the house edge so the bonus does not change
  * the upgrade RTP: chance = S/T × (1 − edge − bonusEdge) × 100. The displayed chance stays the exact
  * win probability; the bonus is paid from the difference.
  */
-export function bonusEdge(multiplier: number, b: UpgradeBonusConfig): number {
-  if (!b.enabled || b.chancePercent <= 0) return 0
-  const hit = (b.chancePercent / 100) * (b.zonePercent / 100)
+export function bonusEdge(multiplier: number, b: UpgradeBonusConfig, stake: number): number {
+  if (!bonusEligible(b, stake)) return 0
+  const hit = bonusFrequency(b) * (b.zonePercent / 100)
   const dShare = doubleAllowed(multiplier, b) ? b.doubleSharePercent / 100 : 0
   const refundAvg = (b.refundMinPercent + b.refundMaxPercent) / 200
   return hit * (dShare * 2 * multiplier + (1 - dShare) * refundAvg)
 }
 
-/** Decides (server-side, before the roll is revealed) whether this upgrade gets a bonus zone and where. */
+/** Advances the per-user cycle by one eligible upgrade; `due` = this upgrade gets the zone. */
+export function advanceBonusSchedule(s: BonusSchedule | null, b: UpgradeBonusConfig, rand: (n: number) => number): { due: boolean; next: BonusSchedule } {
+  let cur = s
+  if (!cur || cur.cycleLeft <= 0) {
+    const lo = Math.max(1, Math.min(b.minInterval, b.maxInterval))
+    const hi = Math.max(lo, b.maxInterval)
+    const len = lo + rand(hi - lo + 1)
+    cur = { cycleLeft: len, bonusIn: 1 + rand(len) }
+  }
+  const next = { cycleLeft: cur.cycleLeft - 1, bonusIn: cur.bonusIn - 1 }
+  return { due: next.bonusIn === 0, next }
+}
+
+/** Places a due bonus zone (server-side, before the roll is revealed). Null if the losing range is too small. */
 export function planBonus(threshold: number, multiplier: number, b: UpgradeBonusConfig, rand: (n: number) => number): BonusPlan | null {
-  if (!b.enabled || rand(10_000) >= Math.round(b.chancePercent * 100)) return null
   const size = Math.round((b.zonePercent / 100) * ROLL_SCALE)
   const free = ROLL_SCALE - threshold - 2 * BONUS_MARGIN - size
   if (size <= 0 || free < 0) return null

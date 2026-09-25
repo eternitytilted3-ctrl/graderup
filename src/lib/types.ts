@@ -95,6 +95,8 @@ export interface UpgradeResultDTO {
   rollFraction: number
   sources: ItemDTO[]
   sourceValue: string
+  /** Coins added from the balance to the stake. */
+  balanceStake: string
   target: ItemDTO
   resultUserItemId: string | null
   /** Bonus zone shown on the dial for this spin (decided with the roll), or null. */

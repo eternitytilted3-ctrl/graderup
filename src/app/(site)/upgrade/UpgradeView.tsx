@@ -26,7 +26,8 @@ import type { InventoryItemDTO, ItemDTO, Paginated, UpgradeBonusDTO, UpgradeResu
 import { useFetch } from '@/lib/useFetch'
 
 const MAX_SOURCES = 5
-type QuickMode = 'x2' | 'x5' | 'x10' | 'c30' | 'c50' | 'c75'
+/** `x<N>` (stake × N) or `c<N>` (≈N% chance) — values come from the admin settings. */
+type QuickMode = string
 
 interface Preview {
   chance: string
@@ -51,7 +52,7 @@ function SourcesSlot({ sources, onRemove, disabled, state }: { sources: Inventor
       <div className="mt-3 grid flex-1 grid-cols-3 gap-2">
         {sources.map((e) => (
           <div key={e.id} data-rarity={e.item.rarity} className="slot-bg group relative flex flex-col items-center justify-center overflow-hidden rounded-[var(--radius-md)] border border-border p-1.5">
-            <Image src={e.item.image} alt={e.item.name} width={120} height={84} className="h-12 w-auto object-contain" />
+            <Image src={e.item.image} alt={e.item.name} width={160} height={120} className="h-16 w-auto max-w-full object-contain" />
             <span className="mt-1 w-full truncate text-center text-[10px] text-muted">{e.item.name.split(' | ')[0]}</span>
             <span className="text-[11px] font-semibold tnum">{formatMoney(e.item.price)}</span>
             <span className="absolute inset-x-0 bottom-0 h-[2px]" style={{ background: 'var(--r)' }} />
@@ -76,12 +77,67 @@ function SourcesSlot({ sources, onRemove, disabled, state }: { sources: Inventor
   )
 }
 
-interface PublicBonus {
-  chancePercent: number
-  zonePercent: number
-  refundMinPercent: number
-  refundMaxPercent: number
-  doubleMaxMultiplier: number
+const fmtNum = (n: number) => String(n).replace('.', ',')
+
+/** Add coins from the balance to the stake: slider + input + quick chips. */
+function BalanceStake({ value, onChange, itemsValue, balance, max, disabled }: { value: string; onChange: (v: string) => void; itemsValue: number; balance: number; max: number; disabled: boolean }) {
+  const limit = Math.max(0, Math.floor(Math.min(balance, max) * 100) / 100)
+  const n = Math.min(limit, Number(value) || 0)
+  const set = (v: number) => onChange(v > 0 ? (Math.floor(Math.min(limit, v) * 100) / 100).toFixed(2) : '')
+  return (
+    <div className="stake-box rounded-[var(--radius-xl)] border border-border bg-card p-3.5" data-testid="balance-stake">
+      <div className="flex items-center justify-between gap-2">
+        <span className="label">Добавить с баланса</span>
+        <span className="text-[11px] text-subtle tnum">доступно {formatMoney(limit.toFixed(2))}</span>
+      </div>
+      <div className="mt-2.5 flex items-center gap-2.5">
+        <input
+          type="range"
+          min={0}
+          max={limit || 0}
+          step={limit > 1000 ? 1 : 0.01}
+          value={n}
+          disabled={disabled || limit <= 0}
+          onChange={(e) => set(Number(e.target.value))}
+          className="stake-range flex-1"
+          aria-label="Сумма с баланса"
+          style={{ ['--p' as string]: `${limit ? (n / limit) * 100 : 0}%` }}
+        />
+        <div className="relative w-28">
+          <input
+            inputMode="decimal"
+            value={value}
+            placeholder="0"
+            disabled={disabled || limit <= 0}
+            onChange={(e) => {
+              const v = e.target.value.replace(',', '.').replace(/[^\d.]/g, '')
+              if (v === '') return onChange('')
+              if (/^\d{0,9}(\.\d{0,2})?$/.test(v)) onChange(Number(v) > limit ? limit.toFixed(2) : v)
+            }}
+            className="input h-9 pr-7 text-right tnum"
+            aria-label="Сумма с баланса, C"
+            data-testid="balance-stake-input"
+          />
+          <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-xs text-muted">C</span>
+        </div>
+      </div>
+      <div className="mt-2.5 grid grid-cols-5 gap-1.5">
+        {[
+          ['+10%', 0.1],
+          ['+25%', 0.25],
+          ['+50%', 0.5],
+          ['+100%', 1],
+        ].map(([label, k]) => (
+          <button key={label} type="button" disabled={disabled || limit <= 0 || itemsValue <= 0} onClick={() => set(itemsValue * (k as number))} className="chip-btn">
+            {label}
+          </button>
+        ))}
+        <button type="button" disabled={disabled || limit <= 0} onClick={() => set(n > 0 ? 0 : limit)} className="chip-btn">
+          {n > 0 ? 'Сброс' : 'Макс'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export function UpgradeView({
@@ -92,11 +148,16 @@ export function UpgradeView({
   config: {
     minMultiplier: number
     maxMultiplier: number
-    bonus: PublicBonus | null
+    quickMultipliers: number[]
+    quickChances: number[]
+    maxBalanceStake: number
   }
 }) {
   const toast = useToast()
-  const { refresh: refreshSession } = useSession()
+  const { user, refresh: refreshSession } = useSession()
+  /** Coins added from the balance to the stake (string money, '' = none). */
+  const [stakeBal, setStakeBal] = useState('')
+  const balStake = D(stakeBal || '0')
   const params = useSearchParams()
   /** Bonus zone of the current / last spin (server-decided, revealed when the spin starts). */
   const [bonus, setBonus] = useState<UpgradeBonusDTO | null>(null)
@@ -120,7 +181,9 @@ export function UpgradeView({
   const [tSearch, setTSearch] = useState('')
   const [tSort, setTSort] = useState<'price_asc' | 'price_desc'>('price_asc')
 
-  const sourceValue = sources.reduce((s, e) => s.plus(e.item.price), D(0))
+  const itemsValue = sources.reduce((s, e) => s.plus(e.item.price), D(0))
+  /** Total stake = items + coins from the balance. */
+  const sourceValue = itemsValue.plus(sources.length ? balStake : 0)
   const sourceIds = sources.map((s) => s.id)
   const inv = useFetch<Paginated<InventoryItemDTO>>(authed ? `/api/inventory${qs({ page: invPage, pageSize: 12, sort: 'price_desc' })}` : null)
   const minTarget = sources.length ? sourceValue.mul(config.minMultiplier).toFixed(2) : undefined
@@ -144,20 +207,20 @@ export function UpgradeView({
     const c = new AbortController()
     const t = setTimeout(() => {
       api<Preview>('/api/upgrade/preview', {
-        body: { userItemIds: idsKey.split(','), targetItemId: target.id },
+        body: { userItemIds: idsKey.split(','), targetItemId: target.id, balanceAmount: balStake.gt(0) ? balStake.toFixed(2) : undefined },
         signal: c.signal,
       })
         .then(setPreview)
         .catch((e: ApiError) => {
           if (e.name !== 'AbortError') toast.error('Недопустимая комбинация', e.message)
         })
-    }, 150)
+    }, 200)
     return () => {
       clearTimeout(t)
       c.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [idsKey, target?.id])
+  }, [idsKey, target?.id, stakeBal])
 
   const spinning = state === 'spinning'
   const done = state === 'win' || state === 'loss'
@@ -204,7 +267,7 @@ export function UpgradeView({
     try {
       // The server decides the outcome (and any bonus zone) first; the dial only visualizes the returned roll.
       const r = await api<UpgradeResultDTO>('/api/upgrade', {
-        body: { userItemIds: sourceIds, targetItemId: target.id },
+        body: { userItemIds: sourceIds, targetItemId: target.id, balanceAmount: balStake.gt(0) ? balStake.toFixed(2) : undefined },
       })
       setLastChance(Number(r.chance))
       if (r.bonus) {
@@ -251,6 +314,8 @@ export function UpgradeView({
         toast.error('Апгрейд не удался', r.sources.length > 1 ? `Сгорело предметов: ${r.sources.length}` : `${r.sources[0].name} сгорел`)
       }
       setSources([])
+      setStakeBal('')
+      if (balStake.gt(0)) void refreshSession()
       inv.reload()
     } catch (err) {
       setState('idle')
@@ -267,7 +332,7 @@ export function UpgradeView({
     resetOutcome()
     setAutoMode(mode)
     try {
-      const item = await api<ItemDTO>(`/api/upgrade/auto-target${qs({ userItemIds: idsKey, mode })}`)
+      const item = await api<ItemDTO>(`/api/upgrade/auto-target${qs({ userItemIds: idsKey, mode, balanceAmount: balStake.gt(0) ? balStake.toFixed(2) : undefined })}`)
       sfx.click()
       setTarget(item)
     } catch (err) {
@@ -292,7 +357,14 @@ export function UpgradeView({
       <PageHeader eyebrow="Upgrade" title="Апгрейд предметов" description={`Выберите до ${MAX_SOURCES} своих предметов и цель дороже минимум в ${config.minMultiplier}× их суммы. Чем выше множитель — тем ниже шанс.`} actions={<SoundToggle />} />
 
       <section id="upgrade-panel" className="card grid scroll-mt-20 items-stretch gap-4 p-4 sm:p-6 lg:grid-cols-[1fr_auto_1fr] lg:gap-8" aria-label="Апгрейд">
-        <SourcesSlot sources={sources} onRemove={(id) => setSources((c) => c.filter((s) => s.id !== id))} disabled={spinning} state={state} />
+        <div className="flex flex-col gap-3">
+          <div className="flex-1">
+            <SourcesSlot sources={sources} onRemove={(id) => setSources((c) => c.filter((s) => s.id !== id))} disabled={spinning} state={state} />
+          </div>
+          {authed && config.maxBalanceStake > 0 && (
+            <BalanceStake value={stakeBal} onChange={setStakeBal} itemsValue={itemsValue.toNumber()} balance={Number(user?.balance ?? 0)} max={config.maxBalanceStake} disabled={spinning || !sources.length} />
+          )}
+        </div>
         <div className="flex flex-col items-center justify-center gap-3 py-2">
           <div ref={dialBox} className="flex w-full justify-center">
             <UpgradeDial ref={dial} chance={done || spinning ? lastChance : chanceNum} state={state} bonus={done || spinning ? bonus : null} />
@@ -325,44 +397,44 @@ export function UpgradeView({
             <Zap className="size-3.5" /> Быстрая прокрутка
           </label>
         </div>
-        <UpgradeCard
-          label="Цель"
-          item={target}
-          placeholder="Выберите цель из списка или кнопкой ниже"
-          onClear={
-            spinning
-              ? undefined
-              : () => {
-                  setTarget(null)
-                  resetOutcome()
-                }
-          }
-          highlight={state === 'win' ? 'win' : null}
-        />
+        <div className="flex flex-col gap-3">
+          <div className="flex-1">
+            <UpgradeCard
+              label="Цель"
+              item={target}
+              placeholder="Выберите цель из списка или быстрым выбором ниже"
+              onClear={
+                spinning
+                  ? undefined
+                  : () => {
+                      setTarget(null)
+                      resetOutcome()
+                    }
+              }
+              highlight={state === 'win' ? 'win' : null}
+            />
+          </div>
+          <div className="quick-box rounded-[var(--radius-xl)] border border-border bg-card p-3.5" role="group" aria-label="Быстрый выбор цели">
+            {(
+              [
+                ['Множитель', config.quickMultipliers.map((n) => [`x${n}`, `×${fmtNum(n)}`])],
+                ['Шанс', config.quickChances.map((n) => [`c${n}`, `${fmtNum(n)}%`])],
+              ] as const
+            ).map(([title, list]) => (
+              <div key={title} className="flex items-center gap-2 not-first:mt-2">
+                <span className="w-[74px] shrink-0 text-[11px] font-semibold tracking-wide text-subtle uppercase">{title}</span>
+                <div className="grid flex-1 gap-1.5" style={{ gridTemplateColumns: `repeat(${list.length}, minmax(0, 1fr))` }}>
+                  {list.map(([mode, label]) => (
+                    <button key={mode} onClick={() => quick(mode)} disabled={spinning || autoMode !== null} data-testid={`quick-${mode}`} className="quick-btn" data-kind={mode[0]}>
+                      {autoMode === mode ? '…' : label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
-
-      <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6" role="group" aria-label="Быстрый выбор цели">
-        {(
-          [
-            ['x2', '×2'],
-            ['x5', '×5'],
-            ['x10', '×10'],
-            ['c30', '30%'],
-            ['c50', '50%'],
-            ['c75', '75%'],
-          ] as const
-        ).map(([mode, label]) => (
-          <button
-            key={mode}
-            onClick={() => quick(mode)}
-            disabled={spinning || autoMode !== null}
-            data-testid={`quick-${mode}`}
-            className="h-11 rounded-[var(--radius-md)] border border-border bg-card font-display text-base font-semibold tracking-wide transition hover:border-accent/60 hover:bg-accent/10 hover:text-accent disabled:opacity-50"
-          >
-            {autoMode === mode ? '…' : label}
-          </button>
-        ))}
-      </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <section aria-label="Инвентарь для апгрейда">
