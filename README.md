@@ -171,6 +171,17 @@ npm run sim -- --burst=2000              # быстро прогнать 2000 д
 npm run sim -- --cleanup                 # «припарковать» ботов (бан)
 ```
 
+### Пополнение и вывод скинов на живом сервере
+
+В production тестовые платёжка и вывод выключены. Включите реальные провайдеры в `.env.production` и пересоздайте контейнер (`docker compose -f docker-compose.prod.yml --env-file .env.production up -d`):
+
+| Что | Переменные | Куда в кабинете провайдера |
+| --- | --- | --- |
+| Pally | `PALLY_API_TOKEN`, `PALLY_SHOP_ID` | Result URL: `{APP_URL}/api/payments/webhook/pally` |
+| AnyPay | `ANYPAY_MERCHANT_ID`, `ANYPAY_SECRET_KEY` | URL оповещений: `{APP_URL}/api/payments/webhook/anypay` |
+| xRocket (крипта) | `XROCKET_API_KEY` | Webhook: `{APP_URL}/api/payments/webhook/xrocket` |
+| Вывод скинов в Steam | `TRADE_PROVIDER=marketcsgo`, `MARKETCSGO_API_KEY` | пополненный баланс на market.csgo.com; скин покупается там и продавец шлёт трейд игроку |
+
 ### Тестовый сервер рядом с живым (VPS)
 
 `bash deploy/setup-test.sh` поднимает отдельный стенд на порту 4556 (`docker-compose.test.yml`): своя база, свои cookie (`gut_*`), тестовые платежи и выводы, закрыт от поисковиков, внизу каждой страницы плашка «Тестовый сервер». Сервис `sim` всё время гоняет ботов (`npm run sim`).

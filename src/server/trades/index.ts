@@ -1,5 +1,6 @@
 import 'server-only'
 import { env } from '@/config/env'
+import { MarketCsgoTradeProvider } from './MarketCsgoTradeProvider'
 import { MockTradeProvider } from './MockTradeProvider'
 import type { TradeProvider } from './TradeProvider'
 
@@ -9,12 +10,12 @@ export function tradesMockAllowed() {
   return cfg.NODE_ENV !== 'production' || cfg.ALLOW_MOCK_TRADES_IN_PRODUCTION
 }
 
-/**
- * Returns the configured trade provider or null (skin withdrawal is then unavailable).
- * TODO: add a real adapter (e.g. a CS2 marketplace "buy-for" API or own Steam bots) and select it via TRADE_PROVIDER.
- */
+/** Returns the configured trade provider or null (skin withdrawal is then unavailable). */
 export function getTradeProvider(): TradeProvider | null {
   const cfg = env()
+  if (cfg.TRADE_PROVIDER === 'marketcsgo' && cfg.MARKETCSGO_API_KEY) {
+    return new MarketCsgoTradeProvider({ apiKey: cfg.MARKETCSGO_API_KEY, apiUrl: cfg.MARKETCSGO_API_URL, maxOverpayPercent: cfg.MARKETCSGO_MAX_OVERPAY_PERCENT })
+  }
   if (cfg.TRADE_PROVIDER === 'mock' && tradesMockAllowed()) return new MockTradeProvider()
   return null
 }

@@ -41,7 +41,12 @@ const schema = z.object({
   /** How many coins (₽) one unit of XROCKET_CURRENCY is worth, e.g. 95 for USDT. */
   XROCKET_COINS_PER_UNIT: z.coerce.number().positive().default(95),
   /** Skin withdrawal to Steam: 'mock' (dev simulation) | 'none'. Real adapters: see src/server/trades. */
-  TRADE_PROVIDER: z.enum(['none', 'mock']).default('mock'),
+  TRADE_PROVIDER: z.enum(['none', 'mock', 'marketcsgo']).default('mock'),
+  /** market.csgo.com "buy-for" delivery (TRADE_PROVIDER=marketcsgo). */
+  MARKETCSGO_API_KEY: z.string().optional(),
+  MARKETCSGO_API_URL: z.string().url().default('https://market.csgo.com/api/v2'),
+  /** How much above the item price the site agrees to pay on the market, %. */
+  MARKETCSGO_MAX_OVERPAY_PERCENT: z.coerce.number().min(0).max(100).default(10),
   ALLOW_MOCK_TRADES_IN_PRODUCTION: bool,
   STEAM_AUTH_ENABLED: z
     .string()

@@ -44,9 +44,11 @@ ANYPAY_MERCHANT_ID=
 ANYPAY_SECRET_KEY=
 XROCKET_API_KEY=
 
-# Skin withdrawals to Steam: no real provider yet -> off in production.
+# Skin withdrawals to Steam: marketcsgo = real delivery via market.csgo.com buy-for (needs key + funded market balance).
 TRADE_PROVIDER=none
 ALLOW_MOCK_TRADES_IN_PRODUCTION=false
+MARKETCSGO_API_KEY=
+MARKETCSGO_MAX_OVERPAY_PERCENT=10
 
 STEAM_AUTH_ENABLED=true
 STEAM_API_KEY=
