@@ -26,7 +26,7 @@
     "prices:sync": "tsx --conditions=react-server scripts/sync-prices.ts",
     "skins:import": "tsx --conditions=react-server scripts/import-skins.ts",
     "cases:rebuild": "tsx --conditions=react-server scripts/rebuild-cases.ts",
-    "prices:update": "npm run prices:sync && npm run cases:rebuild"
+    "prices:update": "npm run prices:sync -- --provider=auto --reestimate && npm run cases:rebuild"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",

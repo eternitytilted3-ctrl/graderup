@@ -324,12 +324,6 @@ export function UpgradeView({
             <input type="checkbox" checked={fast} onChange={(e) => setFast(e.target.checked)} className="size-4 accent-[#7C5CFF]" data-testid="upgrade-fast" />
             <Zap className="size-3.5" /> Быстрая прокрутка
           </label>
-          {config.bonus && (
-            <p className="max-w-[340px] text-center text-xs leading-relaxed text-muted" data-testid="upgrade-bonus-hint">
-              С шансом {config.bonus.chancePercent}% в проигрышной части появится бонус-зона {config.bonus.zonePercent}%: <span className="font-semibold text-[#ffc93c]">страховка</span> (вернём {config.bonus.refundMinPercent}–{config.bonus.refundMaxPercent}% ставки) или{' '}
-              <span className="font-semibold text-[#ff4fd8]">×2</span> (цель выдадим дважды, до ×{config.bonus.doubleMaxMultiplier}).
-            </p>
-          )}
         </div>
         <UpgradeCard
           label="Цель"

@@ -1,12 +1,13 @@
 import 'server-only'
 import Decimal from 'decimal.js'
-import { and, eq, isNotNull } from 'drizzle-orm'
+import { and, eq, isNotNull, sql } from 'drizzle-orm'
 import { D, toMoney } from '@/lib/money'
 import { getDb } from '../db/client'
 import { items } from '../db/schema'
 import { logAdmin, logEvent } from '../services/log'
 import { getSetting } from '../services/settings'
 import { ChainPriceProvider } from './ChainPriceProvider'
+import { estimateFromName } from './estimate'
 import { MarketCsgoPriceProvider } from './MarketCsgoPriceProvider'
 import { MockPriceProvider } from './MockPriceProvider'
 import type { PriceProvider } from './PriceProvider'
@@ -39,11 +40,13 @@ export async function getPriceProvider(id: string, current: Map<string, string>)
 /**
  * Pulls market prices for every item with a market_hash_name (and not price-locked),
  * applies the configured markup/min price and updates items.price.
- * NB: item prices drive case EV — review case RTP in the admin case editor after a sync.
+ * `reestimate`: items the market did not price and that still carry an estimate are re-priced with the
+ * current offline estimator (fixes catalogues seeded with an older estimate).
+ * NB: item prices drive case EV — rebuild/rebalance cases after a sync (`npm run prices:update` does it).
  */
-export async function syncPrices(opts: { adminId?: string; dryRun?: boolean } = {}) {
+export async function syncPrices(opts: { adminId?: string; dryRun?: boolean; provider?: string; reestimate?: boolean } = {}) {
   const cfg = await getSetting('pricing')
-  const providerId = process.env.PRICE_PROVIDER ?? cfg.provider
+  const providerId = opts.provider ?? process.env.PRICE_PROVIDER ?? cfg.provider
   const db = getDb()
   const rows = await db
     .select()
@@ -51,26 +54,55 @@ export async function syncPrices(opts: { adminId?: string; dryRun?: boolean } = 
     .where(and(isNotNull(items.marketHashName), eq(items.priceLocked, false)))
   const current = new Map(rows.map((r) => [r.marketHashName!, r.marketPrice ?? r.price]))
   const provider = await getPriceProvider(providerId, current)
-  if (!provider) return { provider: providerId, updated: 0, missing: rows.length, total: rows.length, changes: [] as unknown[] }
+  let prices = new Map<string, { price: string }>()
+  const errors: string[] = []
+  if (provider) {
+    try {
+      prices = await provider.fetchPrices([...current.keys()])
+    } catch (err) {
+      if (!opts.reestimate) throw err
+      errors.push((err as Error).message)
+    }
+    if (provider instanceof ChainPriceProvider) errors.push(...provider.errors)
+  } else if (!opts.reestimate) {
+    return { provider: providerId, updated: 0, missing: rows.length, total: rows.length, reestimated: 0, errors, changes: [] as unknown[] }
+  }
 
-  const prices = await provider.fetchPrices([...current.keys()])
   const changes: { id: string; name: string; from: string; to: string }[] = []
+  const updates: { id: string; price: string; marketPrice: string | null; source: string }[] = []
+  let reestimated = 0
   for (const r of rows) {
     const mp = prices.get(r.marketHashName!)
-    if (!mp) continue
-    const newPrice = toMoney(Decimal.max(D(mp.price).mul(1 + cfg.markupPercent / 100), cfg.minPrice))
-    if (!opts.dryRun) {
-      await db
-        .update(items)
-        .set({ marketPrice: mp.price, price: newPrice, priceSource: provider instanceof ChainPriceProvider ? (provider.sources.get(r.marketHashName!) ?? provider.id) : provider.id, priceUpdatedAt: new Date(), updatedAt: new Date() })
-        .where(eq(items.id, r.id))
-    }
+    let newPrice: string
+    if (mp) {
+      newPrice = toMoney(Decimal.max(D(mp.price).mul(1 + cfg.markupPercent / 100), cfg.minPrice))
+      const source = provider instanceof ChainPriceProvider ? (provider.sources.get(r.marketHashName!) ?? provider.id) : provider!.id
+      updates.push({ id: r.id, price: newPrice, marketPrice: mp.price, source })
+    } else if (opts.reestimate && (r.priceSource === null || r.priceSource === 'estimate')) {
+      newPrice = toMoney(Decimal.max(estimateFromName(r.marketHashName!, r.rarity), cfg.minPrice))
+      updates.push({ id: r.id, price: newPrice, marketPrice: null, source: 'estimate' })
+      reestimated++
+    } else continue
     if (newPrice !== r.price) changes.push({ id: r.id, name: r.name, from: r.price, to: newPrice })
   }
-  const summary = { provider: provider.id, total: rows.length, updated: prices.size, missing: rows.length - prices.size, changes: changes.slice(0, 200) }
-  if (opts.adminId && !opts.dryRun) {
-    await logAdmin(db, { adminId: opts.adminId, action: 'prices_sync', details: { provider: provider.id, updated: prices.size, changed: changes.length } })
+  if (!opts.dryRun) {
+    for (let i = 0; i < updates.length; i += 500) {
+      const chunk = updates.slice(i, i + 500)
+      const values = sql.join(
+        chunk.map((u) => sql`(${u.id}::uuid, ${u.price}::numeric, ${u.marketPrice}::numeric, ${u.source})`),
+        sql`, `,
+      )
+      await db.execute(sql`
+        UPDATE items AS i SET price = v.price, market_price = v.market_price, price_source = v.source, price_updated_at = now(), updated_at = now()
+        FROM (VALUES ${values}) AS v(id, price, market_price, source)
+        WHERE i.id = v.id AND i.price_locked = false`)
+    }
   }
-  void logEvent('prices_sync', { details: { provider: provider.id, updated: prices.size, changed: changes.length, dryRun: Boolean(opts.dryRun) } })
+  const id = provider?.id ?? 'none'
+  const summary = { provider: id, total: rows.length, updated: prices.size, missing: rows.length - prices.size, reestimated, errors, changes: changes.slice(0, 200) }
+  if (opts.adminId && !opts.dryRun) {
+    await logAdmin(db, { adminId: opts.adminId, action: 'prices_sync', details: { provider: id, updated: prices.size, changed: changes.length } })
+  }
+  void logEvent('prices_sync', { details: { provider: id, updated: prices.size, reestimated, changed: changes.length, dryRun: Boolean(opts.dryRun) } })
   return summary
 }

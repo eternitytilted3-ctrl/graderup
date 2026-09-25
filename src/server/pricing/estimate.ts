@@ -164,3 +164,13 @@ export function estimateRubPrice(s: EstimateInput): number {
   }
   return Math.max(3, Math.round(price * wear * 100) / 100)
 }
+
+const WEAR_RE = /\s*\((Factory New|Minimal Wear|Field-Tested|Well-Worn|Battle-Scarred)\)$/
+
+/** Same estimate from a stored item (market_hash_name + rarity): "★ Karambit | Fade (Factory New)". */
+export function estimateFromName(marketHashName: string, rarity: Rarity): number {
+  const wear = marketHashName.match(WEAR_RE)?.[1] ?? null
+  const core = marketHashName.replace(WEAR_RE, '').replace(/^★\s*/, '')
+  const [weapon, pattern] = core.split(' | ')
+  return estimateRubPrice({ marketHashName, rarity, weapon: weapon.trim(), pattern: pattern?.trim() || null, wear })
+}

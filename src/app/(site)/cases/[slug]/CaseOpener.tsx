@@ -4,6 +4,7 @@ import { Coins, PackageCheck, RotateCcw, Zap } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { CrateStage, openingDuration, type CratePhase } from '@/components/domain/CrateStage'
 import { Roulette, type RouletteHandle } from '@/components/domain/Roulette'
 import { WinCelebration } from '@/components/domain/WinCelebration'
 import { RarityBadge, rarityColor } from '@/components/domain/RarityBadge'
@@ -31,20 +32,6 @@ function shuffled<T>(arr: T[], seed: number) {
   return a
 }
 
-type Phase = 'idle' | 'opening' | 'spinning' | 'done'
-
-/** Crate on its pedestal; shakes, flashes and bursts open when `phase` is 'opening'. */
-function CrateStage({ image, name, phase, fast }: { image: string; name: string; phase: Phase; fast: boolean }) {
-  return (
-    <div className="crate-stage relative flex h-60 items-center justify-center overflow-hidden rounded-[var(--radius-xl)] border border-border bg-bg-2 sm:h-72" data-phase={phase}>
-      <div className="crate-rays pointer-events-none absolute top-1/2 left-1/2 aspect-square w-[140%] -translate-x-1/2 -translate-y-1/2" />
-      <div className="pointer-events-none absolute inset-x-[25%] bottom-6 h-6 rounded-[50%] bg-black/60 blur-lg" />
-      <Image src={image} alt={`Кейс ${name}`} width={320} height={246} priority className={cn('relative h-48 w-auto drop-shadow-[0_24px_36px_rgba(0,0,0,0.55)] sm:h-60', phase === 'opening' ? (fast ? 'crate-opening-fast' : 'crate-opening') : 'crate-idle')} />
-      {phase === 'opening' && !fast && <div className="crate-flash pointer-events-none absolute top-1/2 left-1/2 size-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(closest-side,#fff,rgb(0_212_255/0.6)_40%,transparent)]" />}
-    </div>
-  )
-}
-
 export function CaseOpener({ caseId, slug, name, image, price, items }: { caseId: string; slug: string; name: string; image: string; price: string; items: CaseItemDTO[] }) {
   const { user, setBalance } = useSession()
   const toast = useToast()
@@ -52,7 +39,7 @@ export function CaseOpener({ caseId, slug, name, image, price, items }: { caseId
   const [reels, setReels] = useState(1)
   const handles = useRef<(RouletteHandle | null)[]>([])
   const [busy, setBusy] = useState(false)
-  const [phase, setPhase] = useState<Phase>('idle')
+  const [phase, setPhase] = useState<CratePhase>('idle')
   const [fast, setFast] = useState(false)
   const [result, setResult] = useState<OpenCasesResult | null>(null)
   const [sold, setSold] = useState<Set<string>>(new Set())
@@ -83,7 +70,7 @@ export function CaseOpener({ caseId, slug, name, image, price, items }: { caseId
       // 2. Animations only visualize the returned results: crate bursts open, then the reels spin.
       setPhase('opening')
       sfx.crateUnlock()
-      await new Promise((res) => setTimeout(res, fast ? 350 : 1150))
+      await new Promise((res) => setTimeout(res, openingDuration(fast)))
       setPhase('spinning')
       await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))
       await Promise.all(r.results.map((drop, i) => handles.current[i]?.spin(drop.reel, drop.winIndex, { fast })))

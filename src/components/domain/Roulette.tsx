@@ -50,7 +50,7 @@ const BIG: Rarity[] = ['legendary', 'mythic']
 
 /**
  * Pure visualization: the winning item and reel come from the server response.
- * Big tiles (≤ 7 visible), motion blur while fast, the tile under the marker lights up, a short
+ * Big tiles (≤ 7 visible, crisp — no blur), the tile under the marker lights up, a short
  * overshoot-and-settle at the end, rarity flash on landing. Web Animations API (compositor-driven).
  */
 export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[]; compact?: boolean; silent?: boolean }>(function Roulette({ idleItems, compact = false, silent = false }, ref) {
@@ -114,11 +114,7 @@ export const Roulette = forwardRef<RouletteHandle, { idleItems: ItemDTO[]; compa
         easing: 'cubic-bezier(0.06, 0.72, 0.12, 1)',
         fill: 'forwards',
       })
-      const blur = el.animate([{ filter: 'blur(2.5px)' }, { filter: 'blur(1.5px)', offset: 0.35 }, { filter: 'blur(0px)', offset: 0.6 }, { filter: 'blur(0px)' }], {
-        duration: fast ? duration : duration - 700,
-        fill: 'forwards',
-      })
-      anims.current = [main, blur]
+      anims.current = [main]
       // Tick + highlight the tile under the marker (direct DOM, no React re-render per frame).
       const tiles = el.children
       let last = -1

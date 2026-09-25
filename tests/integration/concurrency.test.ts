@@ -1,7 +1,7 @@
-import { and, count, eq } from 'drizzle-orm'
+import { and, count, eq, inArray } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { closeDb, getDb } from '@/server/db/client'
-import { cases, payments, userItems } from '@/server/db/schema'
+import { cases, payments, upgradeSources, userItems } from '@/server/db/schema'
 import { getMockProvider } from '@/server/payments'
 import { listCases, openCase, openCases } from '@/server/services/cases'
 import { listInventory, sellAllItems, sellItems } from '@/server/services/inventory'
@@ -120,7 +120,13 @@ describe('multi-source upgrade', () => {
     const u = await createUser()
     const [a, b, c, d] = await grantItems(u.id, cat.cheap.id, 4)
     const rs = await settle([performUpgrade(u.id, [a, b], cat.pricey.id), performUpgrade(u.id, [b, c], cat.pricey.id), performUpgrade(u.id, [c, d], cat.pricey.id)])
-    expect(ok(rs)).toBe(2) // {a,b} and {c,d} succeed, {b,c} conflicts
+    // Which calls win depends on lock order ({a,b}+{c,d}, or {b,c} alone) — never all three.
+    const n = ok(rs)
+    expect(n === 1 || n === 2).toBe(true)
+    const [{ used }] = await getDb().select({ used: count() }).from(userItems).where(and(eq(userItems.userId, u.id), inArray(userItems.id, [a, b, c, d]), eq(userItems.status, 'used')))
+    expect(used).toBe(n * 2)
+    const [{ sources }] = await getDb().select({ sources: count() }).from(upgradeSources).where(inArray(upgradeSources.userItemId, [a, b, c, d]))
+    expect(sources).toBe(n * 2)
     expect(await ledgerConsistent(u.id)).toBe(true)
   })
 })
